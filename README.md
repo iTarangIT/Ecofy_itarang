@@ -64,7 +64,7 @@ tests/         unit (engine, ageing) and integration (UAT flows)
 
 ## Deployment notes
 - Build with `output: "standalone"`; PM2 runs `node .next/standalone/server.js` (never `next start`) and the worker as
-  `tsx src/worker/main.ts` — see `ecosystem.config.js`. `tsx` is a runtime dependency of the worker process, so install with dev dependencies.
+  `tsx src/worker/main.ts` — see `ecosystem.config.cjs`. `tsx` is a runtime dependency of the worker process, so install with dev dependencies.
 - Set `STORAGE_DRIVER=s3` (bucket CORS must allow browser `PUT` from the app origin), `MAIL_DRIVER=ses`, `SMS_DRIVER=gupshup`,
   `QUEUE_DRIVER=bullmq` with `REDIS_URL`, `COOKIE_SECURE=true`, `TENANT_HOSTS=ecofy.itarang.com`.
 - Secrets from AWS Secrets Manager; the app connects as `ecofy_app` only.

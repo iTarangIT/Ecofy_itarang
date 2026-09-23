@@ -1,0 +1,5 @@
+# Shell scripts and deploy files must keep LF: they run on Linux servers and in GitHub Actions.
+*.sh text eol=lf
+deploy/** text eol=lf
+.github/** text eol=lf
+*.cjs text eol=lf

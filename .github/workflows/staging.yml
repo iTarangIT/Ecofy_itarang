@@ -1,0 +1,152 @@
+# Staging deploy: every push to `main` (or a manual run) builds the app on GitHub and ships it to the
+# Hostinger VPS over SSH, where deploy/remote-deploy.sh installs it as a new release under
+# /srv/ecofy/releases/<sha>, points /srv/ecofy/current at it, reloads PM2 and checks /api/v1/health.
+#
+# Required repository settings (Settings → Secrets and variables → Actions):
+#   Secrets   STAGING_SSH_KEY     private key of the `deploy` user on the VPS (ed25519, no passphrase)
+#             STAGING_SSH_HOST    VPS public IP or hostname
+#             STAGING_ENV_FILE    the complete .env for the server (see deploy/staging.env.example)
+#   Variables STAGING_DOMAIN      ecofy-itarang.com
+#             STAGING_SSH_USER    deploy   (optional, default deploy)
+#             STAGING_SSH_PORT    22       (optional, default 22)
+name: staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they are taken from the
+      # same env file the server will run with. Nothing else from the file is used here.
+      - name: Build-time public env
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+        run: |
+          if [ -z "$STAGING_ENV_FILE" ]; then
+            echo "::error::Secret STAGING_ENV_FILE is not set (paste the server .env, see deploy/staging.env.example)"
+            exit 1
+          fi
+          printf '%s\n' "$STAGING_ENV_FILE" | grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' >> "$GITHUB_ENV"
+
+      - name: Build (standalone)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run build
+
+      - name: Package release
+        run: |
+          tar -czf release.tgz \
+            .next/standalone .next/static \
+            public src db scripts deploy \
+            package.json package-lock.json ecosystem.config.cjs \
+            next.config.ts tsconfig.json tsconfig.check.json postcss.config.mjs
+          ls -lh release.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release.tgz
+          retention-days: 7
+
+  deploy:
+    name: Deploy to ${{ vars.STAGING_DOMAIN || 'staging' }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://${{ vars.STAGING_DOMAIN }}
+    env:
+      SSH_USER: ${{ vars.STAGING_SSH_USER || 'deploy' }}
+      SSH_PORT: ${{ vars.STAGING_SSH_PORT || '22' }}
+      SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+      DOMAIN: ${{ vars.STAGING_DOMAIN }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Preflight
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+        run: |
+          missing=""
+          [ -n "$STAGING_SSH_KEY" ]  || missing="$missing STAGING_SSH_KEY"
+          [ -n "$SSH_HOST" ]         || missing="$missing STAGING_SSH_HOST"
+          [ -n "$STAGING_ENV_FILE" ] || missing="$missing STAGING_ENV_FILE"
+          [ -n "$DOMAIN" ]           || missing="$missing STAGING_DOMAIN(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets/variables:$missing"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+
+      - name: SSH key
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload release
+        run: scp -P "$SSH_PORT" release.tgz "$SSH_USER@$SSH_HOST:/srv/ecofy/releases/$SHA.tgz"
+
+      - name: Write server .env
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+        run: |
+          printf '%s\n' "$STAGING_ENV_FILE" | ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            'umask 077 && mkdir -p /srv/ecofy/shared && cat > /srv/ecofy/shared/.env.new && mv /srv/ecofy/shared/.env.new /srv/ecofy/shared/.env'
+
+      - name: Install release, reload PM2, health check
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "mkdir -p /srv/ecofy/releases/$SHA \
+             && tar -xzf /srv/ecofy/releases/$SHA.tgz -C /srv/ecofy/releases/$SHA deploy/remote-deploy.sh \
+             && bash /srv/ecofy/releases/$SHA/deploy/remote-deploy.sh $SHA $DOMAIN"
+
+      - name: Smoke test over HTTPS
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS "https://$DOMAIN/api/v1/health"; then echo; echo "healthy"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::https://$DOMAIN/api/v1/health did not answer 200"
+          exit 1
