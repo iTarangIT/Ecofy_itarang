@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Design tokens from the frozen prototype (look-and-feel reference only). */
+@theme {
+  --color-navy: #02314e;
+  --color-sky: #138fc6;
+  --color-sky-dark: #0f7cad;
+  --color-teal: #165e73;
+  --color-silver: #cecccd;
+  --color-page: #f4f7f9;
+  --color-ink: #122b3a;
+  --color-muted: #5c7280;
+  --color-line: #e2e9ed;
+  --color-ok: #1b8a5a;
+  --color-warn: #c77b12;
+  --color-bad: #b3402f;
+  --color-ecofy: #1b8a5a;
+  --color-epc: #7a5ac1;
+  --color-sky-soft: #e4f2fa;
+  --color-ecofy-soft: #e7f0ec;
+  --color-epc-soft: #eeeaf8;
+  --color-warn-soft: #fdf4e3;
+  --color-bad-soft: #fbede9;
+  --color-chip: #edf2f5;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-card: 10px;
+  --shadow-card: 0 1px 2px rgba(2, 49, 78, 0.06), 0 4px 14px rgba(2, 49, 78, 0.06);
+}
+
+html, body { height: 100%; }
+body { background: var(--color-page); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.45; }
+* { box-sizing: border-box; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--color-silver); border-radius: 5px; }
+
+@layer components {
+  .card { @apply bg-white border border-line rounded-[10px] shadow-[var(--shadow-card)]; }
+  .card-h { @apply flex items-center justify-between gap-3 px-[18px] py-[14px] border-b border-line text-[13.5px] font-semibold; }
+  .card-b { @apply px-[18px] py-4; }
+  .btn { @apply inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3.5 py-2 text-[12.5px] font-semibold text-ink transition hover:border-sky hover:text-sky disabled:cursor-not-allowed disabled:opacity-45; }
+  .btn-primary { @apply border-sky bg-sky text-white hover:bg-sky-dark hover:text-white; }
+  .btn-navy { @apply border-navy bg-navy text-white hover:bg-navy hover:text-white; }
+  .btn-green { @apply border-ecofy bg-ecofy text-white hover:bg-ecofy hover:text-white; }
+  .btn-danger { @apply border-line bg-white text-bad hover:border-bad hover:text-bad; }
+  .btn-sm { @apply px-2.5 py-1.5 text-[12px]; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] text-ink outline-none focus:border-sky focus:ring-2 focus:ring-sky/30; }
+  .label { @apply mb-1 block text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted; }
+  .chip { @apply inline-flex items-center rounded-[10px] px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap; }
+  .th { @apply px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-muted border-b border-line; }
+  .td { @apply px-3.5 py-[11px] text-[13px] border-b border-line align-top; }
+  .rowlink { @apply cursor-pointer hover:bg-[#f7fafc]; }
+  .banner { @apply rounded-[10px] border px-4 py-3 text-[12.5px]; }
+  .banner-green { @apply border-[#cde3d6] bg-[#f2f7f4] text-[#23543c]; }
+  .banner-purple { @apply border-[#ddd2f0] bg-[#f5f2fb] text-[#4a3579]; }
+  .banner-amber { @apply border-[#f0dcaf] bg-warn-soft text-[#8a5b00]; }
+  .banner-red { @apply border-[#f0c7bf] bg-bad-soft text-bad; }
+  .kv { @apply grid grid-cols-[150px_1fr] gap-x-3 gap-y-2 text-[13px]; }
+  .kv dt { @apply text-muted; }
+  .mono { font-family: var(--font-mono); }
+}

@@ -1,0 +1,275 @@
+Ecofy Lead Workspace
+Build baseline after the business review  ·  v1.3  ·  21 September 2026
+| What this document is / Business answered the review pack. Development builds from this document from today. / Every answer is marked Frozen (built as answered), Setting (built as an editable setting in the iTarang Admin portal, with the default shown), or Open (not answered or conflicting; built as our understanding says, and business can change it later). / The calculator is designed by iTarang Admin in the portal, within a fixed and tested formula, and published only after Ecofy approves. |
+
+# Where things stand
+| Status | Items | What it means for the build |
+| Frozen | 46 | Build exactly as answered. |
+| Setting | 7 | Build as an iTarang Admin portal setting; default shown in section 3. |
+| Open | 12 | Build per our understanding (section 2); listed for business in section 7. |
+
+# What changed from the review pack
+| Area | Change |
+| Pickup | No pickup targets. Ageing only, on a Mon–Fri 10:00–19:00 calendar. |
+| Follow-up | iTarang appoints the EPC site visit; the caller records EPC feedback. A meeting or EPC visit is required before assessment. |
+| Assessment | Calculator is a sales aid, not mandatory, and not used for C&I. |
+| Offer | Eligibility, then the EPC quote. No EMI. The caller never sees the eligible amount. GST and installation shown separately. |
+| Sanction | A lower sanction triggers a fresh OTP acceptance. A rejection needs a reason and can go to another financier. |
+| Installation | Can start before sanction. Ecofy collects the down payment and pays out after installation. Proof: photos and the customer's acceptance letter. |
+| Ownership | iTarang can bring its own leads. They skip S0 and can be financed by any NBFC. |
+| Calculator | Values changed (90% usable, 10% headroom), motor starting added, and the whole calculator becomes editable in the portal. |
+
+Stage flow v1.2
+1. Decision register
+| # | Question | Business answer | What we build | Status |
+| S0.1 | Who can push a Warm lead | Ecofy User and Ecofy Admin | Both can push Warm leads to iTarang. | Frozen |
+| S0.2 | Ecofy additions after handoff | Comments, but no stage change | Ecofy Users can add comments; stage stays locked. Adding documents and recordings is a portal permission, off by default. | Setting |
+| S0.3 | Call recording retention | 60 days | Recordings deleted automatically 60 days after upload. Days are editable in the portal. | Frozen |
+| S0.4 | Consent for uploaded leads | Not sure; to be covered by a separate agreement | Row-level consent flag and date stay mandatory. Ecofy Admin confirms consent at every upload (logged). Consent warranty and indemnity go into the Ecofy–iTarang agreement. | Open |
+| S0.5 | Upload matches a closed case | Reopen the old case | The closed case reopens with its history; no duplicate is created. Exception: a case that already reached a File is never reopened (the File is never reversed); a new case is created and linked to it. | Frozen |
+| S1.1 | Pickup targets | No pickup target, only ageing | Pickup targets and the colour indicator removed. Ageing shown per lead and per stage; ageing bands are a portal setting. | Frozen |
+| S1.2 | Working hours | Mon–Fri, 10:00–19:00 | Working calendar used for ageing; holidays editable in the portal. | Frozen |
+| S1.3 | Return reasons | List is fine; add “EPC assigned on date” | The 6 return reasons stay (list is a portal setting). “EPC assigned on date” is built as the EPC visit record in S2, since it is a step forward, not a return. | Open |
+| S1.4 | Track Hot to first call | Yes | Time from Hot to the caller's first call shown on the lead and in dashboards. | Frozen |
+| S2.1 | Who attends meetings | iTarang appoints the EPC to visit the client; caller updates EPC feedback | EPC visit record: EPC partner, visit date, status, feedback and photos, entered by the caller. | Frozen |
+| S2.2 | Meeting types | Any, depends on the client | Meeting types list: phone, video, site visit, EPC visit. Editable in the portal. | Frozen |
+| S2.3 | Meeting before assessment | Yes, mandatory | S3 opens only after one completed meeting or EPC visit. The gate is a portal setting, on. | Frozen |
+| S2.4 | EPC survey vs meeting | Different, but can be the same | A completed EPC visit counts as the meeting. | Frozen |
+| S3.1 | Calculator sizing accepted | Not mandatory; it guides what the caller pitches | Assessment by calculator or manual entry. The calculator is a sales aid, not a gate. | Frozen |
+| S3.2 | Calculator for C&I | Not required | Calculator off for C&I; sizing comes from the EPC. | Frozen |
+| S4.1 | Eligibility and quote order | One after the other | Eligibility first, then the EPC quote. The order is a portal setting (eligibility first / quote first / parallel). | Open |
+| S4.2 | EPC survey charge | EPC may charge; no need to wait for eligibility | EPC site visit can happen before eligibility. Any survey charge is settled outside the platform. | Frozen |
+| S4.3 | What Ecofy needs for eligibility | Ecofy already has what it needs | No eligibility checklist on the platform. Ecofy Admin records the result only. | Frozen |
+| S4.4 | Maximum or exact amount | Maximum eligible amount | Ecofy Admin records a maximum eligible amount. | Frozen |
+| S4.5 | Indicative EMI in the offer | No | No EMI anywhere in the offer. | Frozen |
+| S4.6 | Caller sees eligible amount | No | Amount hidden from the caller. Caller sees only whether the quote is within or above the limit. | Open |
+| S4.7 | Not eligible | Not applicable | If Ecofy records not eligible, the case follows the rejection rule (S6.3): another financier or close. | Open |
+| S4.8 | iTarang margin | Not applicable | Margin is not handled on the platform; price ranges already include it (C.3). | Frozen |
+| S4.9 | EPC partners and quotes | EPC gives the quote; iTarang sends it to Ecofy | Caller uploads the EPC quote; it goes to Ecofy with the File. EPC partner list and quote validity (default 30 days) are portal settings. | Setting |
+| S5.1 | Offer content | SMS OTP when the customer agrees, not Aadhaar | Offer shows system and total price with equipment, installation and GST as separate lines, plus “financing through Ecofy, subject to sanction”. | Frozen |
+| S5.2 | OTP or e-Sign | OTP only | SMS OTP only. | Frozen |
+| S6.1 | What Ecofy records at sanction | Customer documents (address, PAN, bank statement, electricity bill) and product details | Ecofy keeps KYC documents on its own systems. The platform records sanction status, amount (Ecofy Admin only) and date. Product details come from the accepted offer. | Open |
+| S6.2 | Sanction below accepted amount | Fresh acceptance | Ecofy Admin triggers a fresh OTP acceptance; the customer's SMS carries the financed amount and down payment. | Frozen |
+| S6.3 | Rejection after acceptance | Record a reason; pass to a different financier | Rejection reason is mandatory. iTarang Admin routes the case to another financier from the portal list and records that financier's decision, or closes it. | Open |
+| S6.4 | Sanction before installation | No | Installation can start before sanction. The gate is a portal setting, off by default; the platform warns when it happens. | Frozen |
+| S7.1 | When the loan is paid out | After installation | Disbursement recorded only after installation is complete. | Frozen |
+| S7.2 | Down payment | Ecofy collects it | Ecofy Admin records the down payment received. Whether it must come before installation was not answered: portal setting, off. | Setting |
+| S7.3 | Proof of completion | Photos and the client's acceptance letter | Completion needs installation photos and the signed customer acceptance letter. | Frozen |
+| S7.4 | After-sales service | Manufacturer | After-sales stays outside the platform. | Frozen |
+| S8.1 | EMI updates | Ecofy Admin, per Ecofy's policy | Ecofy Admin updates EMI status manually; no fixed frequency. | Frozen |
+| S8.2 | Buyback and redeployment | Yes, in scope | Buyback and redeployment records built for solar and storage. | Frozen |
+| S8.3 | Battery data | No IoT available | Battery risk flags stay off. | Frozen |
+| C.1 | Owner of systems list and prices | Ecofy and iTarang | iTarang Admin maintains the list in the portal; changes go live after Ecofy approves. Refresh reminder (default 30 days) is a setting. | Setting |
+| C.2 | Ecofy Users show prices at S0 | Yes | Price ranges visible to Ecofy Users at S0. | Frozen |
+| C.3 | Margin in price range | Ecofy's prices include iTarang's margin | Ranges include the margin; the margin is never shown separately. | Frozen |
+| C.4 | Leads iTarang finds itself | iTarang owns them and can finance through any NBFC | iTarang can create leads; they skip S0, start at S1, and carry a financier per case. | Open |
+| C.5 | C&I pricing | EPC quote required | C&I shows “EPC quote required” and no price. | Frozen |
+| C.6 | Who signs off the calculator | Ecofy | Calculator changes go live only after Ecofy Admin approves them. | Frozen |
+| C.7 | Higher surge for motor loads | Yes | Each motor appliance carries a starting multiplier (default 3×, set per appliance). | Frozen |
+| C.8 | Bill-only sizing | Acceptable | Sizing from monthly units allowed when the appliance list is unknown. | Frozen |
+| C.9 | Choosing another system | Yes, with a reason | Override allowed; reason mandatory and logged. | Frozen |
+| Calc 1 | Calculator inputs | RESI: either appliance list or bill. ESS: same, or running load. C&I: not required | Built as answered. | Frozen |
+| Calc 2 | Calculation steps 1–9 | Don't know | Built as our method; every value, list and text is editable in the Calculator Designer. | Setting |
+| Calc 3 | Calculation values | Usable share 90%, efficiency 90%, headroom 10%, power factor 0.8; rest blank | Answered values set as defaults. Solar generation (4 units), days (30), alternatives and price display use our defaults, editable. | Setting |
+| Calc 4 | Appliance watts | All 14 confirmed | Appliance list built with the confirmed watts. | Frozen |
+| W.1 | Who handles withdrawals | iTarang | iTarang records withdrawals at every stage. | Frozen |
+| W.2 | EPC cancellation charges | Ecofy | Ecofy covers them; settled outside the platform. | Frozen |
+| W.3 | Admin confirms after acceptance | Yes | iTarang Admin confirms withdrawals after acceptance. | Frozen |
+| L.1 | Sample of real lead data | Not yet | Upload screen maps Ecofy's column names to ours and saves the mapping, so any export works. | Open |
+| L.2 | Pincode | Mandatory | Pincode mandatory. | Frozen |
+| L.3 | How consent was collected | Through the Ecofy–iTarang agreement | See S0.4. | Open |
+| L.4 | Ecofy's own lead ID | No | ecofy_lead_id made optional (Appendix A had marked it mandatory). | Open |
+| L.5 | Assign in the upload file | Both options | assign_to kept as an optional column (Appendix A had removed it), so both options work. | Open |
+| L.6 | Calling languages | Hindi, Marathi, English, Marwari | Language list: these four plus Other. Editable in the portal. | Frozen |
+| App. A | Lead file fields | Kept all but 3; 5 more made mandatory | Now mandatory: consent source, city, state, address, customer type. Removed: campaign reference, remarks. | Frozen |
+| App. B | Standard systems fields | Not reviewed | Built as proposed, with the SL changes below. Mandatory flags as proposed. | Setting |
+| SL.1 | System types per segment | Any is possible | Any system type allowed in any segment. | Frozen |
+| SL.2 | Brands in a standard system | Left to the EPC | Brand fields removed; the EPC names brands in its quote. | Frozen |
+| SL.3 | GST and installation in price | Separately, in columns | Separate columns for equipment price, installation price and GST %. | Frozen |
+| SL.4 | Single and three-phase | Yes, depends on the meter load | Both phases supported; recommendation must match the customer's phase. | Frozen |
+
+# 2. Conflicts and risks, and how we build them
+Answers that clash with each other or with agreed rules. Each is built as shown, so development is not blocked.
+| # | Conflict | What we build | Why it matters |
+| 1 | S6.1 lists PAN and bank statements as sanction records. That breaks agreed rule 10 (no KYC on the platform). | Not stored. Ecofy keeps KYC on its systems; the platform records status, amount and date. | Holding a lender's KYC makes iTarang liable for regulated financial data under DPDP, with audits and breach risk, for no revenue. |
+| 2 | Consent “through an agreement” (S0.4, L.3), while Appendix A keeps per-lead consent mandatory. | Keep per-lead consent flag and date mandatory, plus a logged confirmation at each upload, plus warranty and indemnity from Ecofy in the agreement. | An agreement between two companies moves liability; it does not create the customer's consent. If Ecofy has no per-lead consent dates, uploads will be rejected: surface this before go-live. |
+| 3 | Installation can start before sanction (S6.4), and payout happens after installation (S7.1). | Gate off as answered; the platform warns iTarang Admin when installation starts without sanction. | An installed system that Ecofy then rejects is unfunded. W.2 says Ecofy covers EPC cancellation charges; confirm that also covers a rejection after installation. |
+| 4 | The caller cannot see the eligible amount (S4.6) but must sell within it. | Caller sees “quote within limit” or “above limit”, never the number. | Without it, quotes above the limit get accepted, then cut at sanction, forcing a fresh acceptance and often losing the customer. |
+| 5 | Fresh acceptance after a lower sanction (S6.2), but the caller cannot see amounts and Ecofy collects the down payment. | Ecofy Admin triggers the re-acceptance. The customer's SMS carries the financed amount and down payment; the caller sees status only. | Needs a new DLT SMS template with amount variables. Apply now: DLT approval takes days, and the current template likely has no amount fields. |
+| 6 | Another financier after rejection (S6.3), and iTarang-owned leads financed by any NBFC (C.4). | Financier field on every case (Ecofy by default). iTarang Admin routes and records other financiers' decisions; no financier logins. | The Ecofy workspace will hold cases financed by others. Default: Ecofy sees a case once it is the financier or the lead source. Whether Ecofy earns anything when its lead is financed elsewhere is open. |
+| 7 | Appendix A vs answers: ecofy_lead_id marked mandatory, but Ecofy has no ID (L.4); assign_to removed, but both assignment options wanted (L.5). | Both kept, as optional columns. | Otherwise every upload fails on a column Ecofy cannot fill, and in-file assignment is impossible. |
+| 8 | Surge headroom cut to 10%, while motor loads need more (C.7). | 10% base headroom plus the largest motor's starting power, from a per-appliance multiplier. | A flat 10% undersizes the inverter for homes with an AC, fridge or pump; the inverter trips at motor start. |
+| 9 | No sample of Ecofy's lead data yet (L.1). | Column mapping on the upload screen. | The first real upload is when mismatches show up; mapping stops that becoming a platform failure. |
+
+# 3. iTarang Admin portal settings
+Everything business left unanswered or open-ended becomes a setting. Changes are logged with who and when.
+| Area | Setting | Default | Source |
+| Lead intake | Mandatory flag for each optional lead field (the 6 core fields are locked) | As in Appendix A final | App. A |
+| Lead intake | Calling language list | Hindi, Marathi, English, Marwari, Other | L.6 |
+| Lead intake | Saved column mappings per upload source | On | L.1 |
+| Lead intake | Consent confirmation text at upload | On, logged | S0.4 |
+| Permissions | Ecofy Users can add documents and recordings after handoff | Off (comments only) | S0.2 |
+| Recordings | Retention period | 60 days | S0.3 |
+| Ageing | Working calendar and holidays | Mon–Fri, 10:00–19:00 | S1.2 |
+| Ageing | Ageing bands | 0–1, 1–3, 3–7, 7+ working days | Our default |
+| Lists | Return reasons | The 6 agreed reasons | S1.3 |
+| Lists | Closure reasons | Not interested, unreachable, duplicate, out of area, withdrawn, rejected by all financiers | Our default |
+| Lists | Meeting types | Phone, video, site visit, EPC visit | S2.2 |
+| Lists | Document types | Electricity bill, site photo, customer note, call recording, installation photo, customer acceptance letter, other | S7.3 |
+| Gates | Meeting required before assessment | On | S2.3 |
+| Gates | Order of eligibility and EPC quote | Eligibility first | S4.1 |
+| Gates | Sanction required before installation | Off, with warning | S6.4 |
+| Gates | Down payment recorded before installation | Off | S7.2 |
+| EPC | EPC partner list (name, pincodes served, contact) | Empty; iTarang Admin fills | S4.9 |
+| EPC | Quote validity | 30 days | Our default |
+| Financiers | Financier list for routing | Ecofy (default); others added by iTarang Admin | S6.3, C.4 |
+| Calculator | Calculator Designer (section 4) | Business values | C.6, Calc |
+| Systems | Standard systems list and refresh reminder | Reminder after 30 days | C.1 |
+
+# 4. Calculator Designer
+iTarang Admin designs the calculator in the portal by setting its parts: inputs, appliances, values, rules and texts. The formula itself is fixed and tested. A free-form formula editor is not in V1: one wrong formula silently mis-sizes every customer, and it cannot be tested before customers see it. If a real need for a new step appears, we add it to the fixed formula as a new setting.
+## What the admin controls
+| Part | What the admin can change | Default |
+| Segments | Turn the calculator on or off per segment; set the message shown where it is off. | RESI on, ESS on, C&I off (“EPC quote required”) |
+| Input methods | Which inputs each segment offers. Backup hours and phase are always asked. | RESI: appliance list or monthly units. ESS: appliance list, monthly units or running load |
+| Appliance list | Add, remove or rename appliances; set default watts, whether it is a motor load, its starting multiplier, and the display order. | 14 confirmed appliances; motor loads listed below |
+| Values | Every number the formula uses. | See the values table |
+| Recommendation rules | How many smaller and larger alternatives (0–2 each); which sizes must be covered; phase must match. | 1 smaller + 1 larger of the same type; system type follows product interest; phase must match |
+| Display and texts | Price display (range or hidden); separate GST and installation lines; disclaimer, financing line, “custom configuration required” message. | Range, with separate lines |
+| Test bench | Enter sample inputs and see every step's result before publishing. The worked example below is preloaded. | On |
+| Versions and approval | Edits are saved as a draft, tested, approved by Ecofy Admin, then published. Every saved assessment stores the version it used. Any earlier version can be restored. | Ecofy approval required |
+
+## The fixed formula
+| # | Calculates | Method |
+| 1 | Running load (kW) | Watts × quantity for each appliance, added up, ÷ 1,000. Or the running load entered (ESS). Bill only: sanctioned load. |
+| 2 | Backup energy (kWh) | Running load × backup hours. Bill only: (monthly units ÷ days in a month) × backup hours ÷ 24. |
+| 3 | Usable battery needed (kWh) | Backup energy ÷ inverter efficiency. |
+| 4 | Battery size shown (kWh) | Usable battery needed ÷ usable share of the battery. |
+| 5 | Motor starting power (kW) | Largest motor load's watts × (its starting multiplier − 1) ÷ 1,000. Zero if no motor or bill only. |
+| 6 | Inverter size (kVA) | (Running load + motor starting power) × (1 + surge headroom) ÷ power factor. |
+| 7 | Solar size (kWp), residential | (Monthly units ÷ days in a month) ÷ solar generation per kWp per day. |
+| 8 | Recommendation | Smallest active standard system for the segment, phase and type (from product interest; Not sure = all types) that covers the need: Solar + storage checks usable capacity, inverter and solar; Storage only checks usable capacity and inverter; Solar only checks solar kWp (backup hours not asked). Plus the alternatives set in the rules. Three results: RECOMMENDED; CUSTOM_REQUIRED when the need is known but nothing fits (routed to an EPC quote); PENDING_TECHNICAL_DATA when a need cannot be computed for lack of input, never shown as custom. |
+| 9 | Price shown | For each system: equipment range + installation range, then GST at the system's rate, each on its own line. No EMI. “Financing through Ecofy, subject to sanction”. |
+
+## Values
+| Value | Default | Source |
+| Usable share of the battery | 90% | Business (was 80%) |
+| Inverter efficiency | 90% | Business |
+| Surge headroom | 10% | Business (was 25%) |
+| Power factor | 0.8 | Business |
+| Motor starting multiplier: refrigerator, both ACs, water pump | 3× | Our default (C.7) |
+| Motor starting multiplier: washing machine, mixer grinder | 2× | Our default (C.7) |
+| Solar generation per kWp per day | 4 units | Our default |
+| Days in a month | 30 | Our default |
+
+## Worked example with the business values
+| Home with 4 fans, 6 LED bulbs, 1 TV and 1 refrigerator; 4 hours of backup; 300 units a month / Running load = 4 × 75 + 6 × 10 + 100 + 200 = 660 W = 0.66 kW / Backup energy = 0.66 × 4 = 2.64 kWh  →  usable battery needed = 2.64 ÷ 90% = 2.93 kWh  →  battery shown = 2.93 ÷ 90% = 3.26 kWh / Motor starting power = refrigerator 200 W × (3 − 1) = 0.40 kW / Inverter = (0.66 + 0.40) × 1.10 ÷ 0.8 = 1.46 kVA  ·  Solar = (300 ÷ 30) ÷ 4 = 2.5 kWp / Against the review pack: battery 3.67 → 3.26 kWh (90% usable); inverter 1.03 → 1.46 kVA (motor starting now counted). |
+
+5. Data templates, final fields
+The lead upload template v0.3 and standard systems template v0.2 match these lists. Mandatory flags for optional fields can be changed in the portal.
+## Lead upload file (23 fields; campaign_ref and remarks removed)
+| # | Field | Required | Format | Change |
+| 1 | customer_name | Mandatory | Text, up to 100 characters |  |
+| 2 | mobile | Mandatory | 10 digits, starting 6–9. No +91, spaces or dashes. |  |
+| 3 | segment | Mandatory | RESI / ESS / C&I |  |
+| 4 | pincode | Mandatory | 6 digits |  |
+| 5 | consent_obtained | Mandatory | Y only. Rows with N or blank are rejected. |  |
+| 6 | consent_date | Mandatory | DD-MM-YYYY, not in the future |  |
+| 7 | consent_source | Mandatory | Website form / Call / Campaign / Walk-in / Existing customer / Referral / Other | Now mandatory |
+| 8 | city | Mandatory | Text | Now mandatory |
+| 9 | state | Mandatory | Text | Now mandatory |
+| 10 | address | Mandatory | Text, up to 250 characters | Now mandatory |
+| 11 | customer_type | Mandatory | Individual / Business | Now mandatory |
+| 12 | business_name | If business customer | Text. Required when customer_type = Business. |  |
+| 13 | ecofy_lead_id | Optional | Ecofy's own lead or customer ID, if one exists | Optional (open: L.4) |
+| 14 | alternate_mobile | Optional | 10 digits, starting 6–9 |  |
+| 15 | email | Optional | Valid email address |  |
+| 16 | preferred_language | Optional | Hindi / Marathi / English / Marwari / Other | List: Hindi, Marathi, English, Marwari, Other |
+| 17 | property_type | Optional | Own house / Rented house / Own shop / Rented shop / Factory / Office / Other |  |
+| 18 | product_interest | Optional | Solar + storage / Storage only / Solar only / Not sure |  |
+| 19 | avg_monthly_bill_inr | Optional | Whole number, in rupees |  |
+| 20 | sanctioned_load_kw | Optional | Number, from the electricity bill |  |
+| 21 | existing_backup | Optional | None / Inverter / Generator / Both |  |
+| 22 | preferred_call_time | Optional | Morning / Afternoon / Evening / Any |  |
+| 23 | assign_to | Optional | Email of an active Ecofy User. Blank = assign after upload. | Kept, optional (open: L.5) |
+
+## Standard systems list (26 fields; brand and GST/installation Y/N fields removed)
+| # | Field | Required | Format | Change |
+| 1 | system_code | Mandatory | Unique short code |  |
+| 2 | system_name | Mandatory | Text |  |
+| 3 | for_resi | Mandatory | Y / N |  |
+| 4 | for_ess | Mandatory | Y / N |  |
+| 5 | for_ci | Mandatory | Y / N |  |
+| 6 | system_type | Mandatory | Solar + storage / Storage only / Solar only |  |
+| 7 | battery_capacity_kwh | Mandatory | Number. 0 for solar only. |  |
+| 8 | usable_capacity_kwh | Mandatory | Number, not more than battery_capacity_kwh. 0 for solar only. |  |
+| 9 | battery_chemistry | Recommended | LFP / NMC / Other |  |
+| 10 | inverter_kva | Mandatory | Number | Now covers motor starting |
+| 11 | inverter_type | Mandatory | Hybrid / Off-grid / On-grid |  |
+| 12 | phase | Mandatory | Single / Three |  |
+| 13 | solar_kwp | Mandatory | Number. 0 for storage only. |  |
+| 14 | expandable | Optional | Y / N |  |
+| 15 | max_expansion_kwh | Optional | Number |  |
+| 16 | battery_warranty_years | Recommended | Whole number |  |
+| 17 | inverter_warranty_years | Recommended | Whole number |  |
+| 18 | equipment_price_min_inr | Mandatory | Whole number, rupees, before GST | New (SL.3) |
+| 19 | equipment_price_max_inr | Mandatory | Whole number, rupees, before GST; not below the minimum | New (SL.3) |
+| 20 | installation_price_min_inr | Mandatory | Whole number, rupees, before GST | New (SL.3) |
+| 21 | installation_price_max_inr | Mandatory | Whole number, rupees, before GST; not below the minimum | New (SL.3) |
+| 22 | gst_pct | Mandatory | Number, e.g. 12 for 12% | New (SL.3) |
+| 23 | price_updated_on | Mandatory | DD-MM-YYYY |  |
+| 24 | epc_partners | Optional | Text, comma-separated |  |
+| 25 | active | Mandatory | Y / N |  |
+| 26 | notes | Optional | Text |  |
+
+# 6. What this baseline supersedes in the frozen prototype
+The August prototype stays a look-and-feel reference. Where it differs, this baseline wins on business decisions and BRD v1.4 on detailed behaviour.
+| # | Prototype behaviour | Build behaviour | Source |
+| 1 | Warm and Hot leads both enter the pickup queue automatically | Hot enters automatically; Warm stays with Ecofy until an Ecofy User or Ecofy Admin pushes it | 21 Sep decision · S0.1 |
+| 2 | Pickup SLA targets and colours | No targets; ageing in working hours only (Mon–Fri 10:00–19:00) | S1.1 · S1.2 |
+| 3 | C&I preliminary sizing in the calculator | Calculator off for C&I; shows “EPC quote required”; manual or EPC assessment | S3.2 · C.5 |
+| 4 | Catalogue quote generated from the standard systems price list | Quotes come only from the EPC partner (PDF + amounts). Standard system prices are indicative ranges in the calculator only | Agreed rule 3 · S4.9 |
+| 5 | Assessment → quote → acceptance → financing | Assessment → Ecofy eligibility → EPC quote → offer → OTP and File → sanction. Order switchable in settings | S4.1 |
+| 6 | Caller sees the eligible amount and down payment | Caller sees only “within limit” or “above limit”; amounts only in Ecofy Admin views | S4.6 |
+| 7 | EMI shown in the offer | No EMI calculation, and no EMI in the customer offer. An EMI provided by the lender may be recorded by Ecofy Admin after sanction, and EMI status tracked on the asset | S4.5 · S8 |
+| 8 | Acceptance by OTP or e-Sign | SMS OTP only | S5.2 |
+| 9 | Sanction → disbursement → EPC handover → installation | Installation may start before sanction (warning + acknowledgement) and runs in parallel with S6; payout is recorded after installation (section 4.3) | S6.4 · S7.1 |
+| 10 | Asset risk flags from DPD × battery state of health | No IoT and no risk flags in V1; EMI status (DPD band) recorded by Ecofy Admin as a status only | S8.3 |
+| 11 | Commercial price override on the quote screen | No price override on the platform: the price is the EPC's quote. Technical override (choosing another system) stays, with a reason | Agreed rule 3 · C.9 |
+| 12 | Provisional catalogue quote when power data is missing | Kept, adapted: a provisional EPC quote with a mandatory reason when the assessment is PENDING_TECHNICAL_DATA | Earned rule 3 |
+| 13 | Prototype field names (qid, assess, reqKva, ovReason) and sample people and leads | Use the schema names (accepted_quote_id, assessment, required_inverter_kva, override_reason). Sample data is for demonstration only | Naming rule |
+
+## The six earned rules, all carried into the build
+| # | Rule | Where it is built | Status |
+| 1 | Assessment required to complete S3, by calculator or manual / external path, source recorded | M07; assessments.method; S3 → S4 gate | Built |
+| 2 | Recommendation only when segment, capacity and power are known | M07; assessments.recommendation_status (PENDING_TECHNICAL_DATA never collapsed into CUSTOM_REQUIRED); test T19 | Built in v1.3 |
+| 3 | Provisional quote allowed; provisional basis recorded | M09; quotes.provisional + provisional_reason + assessment_id; trigger; test T20 | Built in v1.3 |
+| 4 | Overrides recorded, not prohibited | Section 1; system override with reason; above-limit warning; install before sanction with acknowledgement. Quote-price override is out of V1 (EPC price) | Built |
+| 5 | File locked to a specific accepted_quote_id and version | M10; same-case composite keys from quote to offer to OTP to File; file_lineage_guard checks version, total and the verified OTP chain; File never edited or deleted; tests T25, T26 | Built; hardened in v1.4 |
+| 6 | Ecofy finances, EPC executes, the platform orchestrates, with defined steps | Section 4 state engine (S0 → S8) and the permission matrix | Built |
+
+## Decisions added in v1.2 and v1.3 (technical, no business answer needed)
+| Area | Decision |
+| Provisional quote | When the assessment is pending technical data, the EPC quote is marked provisional with a mandatory reason; it can be offered and accepted (setting on); Ecofy sees the flag and reason. |
+| Calculator types | System type follows product interest; Solar only skips backup and battery steps; Storage only skips solar. |
+| Login | New device verified by a 6-digit email code; trusted 30 days; one live session per user, checked in the database on every request. |
+| Import data | Uploaded files and raw rows deleted 30 days after commit (setting); row errors kept without raw data. |
+| Commercials | Billing is off-platform in V1; a usage view shows seats, Files and active assets and never blocks. |
+| File lineage (v1.3) | The database rejects a File whose quote, version, total or verified OTP chain does not match, and a File is never edited. File creation is the billable event, so this is enforced below the application. |
+| EMI wording (v1.3) | No EMI calculation and no EMI in the customer offer. An EMI given by the lender may be recorded after sanction. |
+| Seed | ecofy_seed_v1.1.sql holds every default in this baseline, the 14 appliances and calculator release v1 as a draft for Ecofy approval. |
+
+# 7. Open items for business
+Built as shown now. Business can confirm or change any of these later without blocking development.
+| Ref | Item | Built as | Who decides |
+| S0.4 / L.3 | Consent for uploaded leads | Per-lead consent mandatory + upload confirmation + agreement clause | Legal (agreement) |
+| S1.3 | “EPC assigned on date” | Built as the EPC visit record in S2, not a return reason | Ecofy |
+| S4.1 | Order of eligibility and quote | Eligibility first; switchable in the portal | Ecofy |
+| S4.6 | Within / above limit indicator | Shown to the caller; amount stays hidden | Ecofy |
+| S4.7 / S6.3 | Not eligible or rejected | Mandatory reason; route to another financier or close | Ecofy |
+| S6.1 | KYC documents at sanction | Not stored on the platform | Ecofy |
+| C.4 / S6.3 | Cases financed by others: Ecofy's visibility and commercials | Ecofy sees a case once it is the financier or the lead source | Founders, both sides |
+| S6.2 | SMS template with amounts | Apply for a new DLT template now | iTarang |
+| S6.4 / W.2 | Rejection after installation: who bears the cost | Warning shown; cost assumed with Ecofy under W.2 | Ecofy |
+| L.1 | Sample of real lead data | Column mapping on upload | Ecofy |
+| L.4 / L.5 | ecofy_lead_id and assign_to | Both optional | Ecofy |

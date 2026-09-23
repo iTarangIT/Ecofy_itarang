@@ -1,0 +1,708 @@
+Ecofy Lead Workspace
+CRM / LMS Business Requirements Document  ·  v1.4  ·  21 September 2026
+ecofy.itarang.com  ·  Tenant #01 on the iTarang Lead Platform
+| How to read this document / It implements Build Baseline v1.3. The Baseline wins on explicit business decisions; this BRD governs detailed behaviour unless it conflicts with a Baseline decision. Any such conflict is a defect: raise it, do not resolve it in code. / Every requirement has an ID (FR-03.4 = module M03, requirement 4). Use these IDs in tickets, test cases and UAT. / Read 00_README_SOURCE_OF_TRUTH.md first. Companion files: ecofy_schema_v1.4.sql (53 tables) with ecofy_schema_tests_v1.4.sql (26 self-checking tests), ecofy_seed_v1.1.sql, ecofy_openapi_v1.0.1.yaml, Ecofy_UAT_Scenarios_v1.1.xlsx, ecofy_system_design_v1.3.png, the lead upload template v0.3 and the standard systems template v0.2. |
+
+# Contents
+| # | Section | What it covers |
+| 1 | Scope and principles | What V1 does and never does |
+| 2 | Users, roles and access | Five actors and the full permission matrix |
+| 1.2 | Supersedes | What changed from the frozen prototype; the six earned rules |
+| 3 | System design | Plate v1.3 and the architecture decisions |
+| 4 | Case state engine | Every stage transition, who triggers it, and its gate |
+| 5 | Modules M01–M18 | Purpose, users, tables, events and numbered requirements |
+| 6 | API structure | Conventions and the endpoint catalogue |
+| 7 | Database | Conventions, table catalogue and template mapping; full DDL in ecofy_schema_v1.4.sql |
+| 8 | Events and jobs | Domain events and background jobs |
+| 9 | Non-functional requirements | Performance, security, privacy, backups |
+| 10 | Deployment on ecofy.itarang.com | Environments, infrastructure, pipeline, go-live |
+| 11 | Build plan and open items | Release order and what is still open |
+
+# 1. Scope and principles
+| In scope (V1) | Lead intake, qualification, queue, follow-up, EPC visits, assessment with a designable calculator, offer, SMS OTP acceptance and File, financing status and routing, installation and disbursement records, asset and EMI status, withdrawals, documents, dashboards, audit, admin portal settings. |
+| Out of scope (V1) | KYC, underwriting and credit decisions; moving or collecting money; EMI calculation; EPC and financier logins; customer-facing app; WhatsApp or dialer integration; IoT telemetry; after-sales service. |
+| Platform boundary | The platform records states and enforces gates with evidence. It never performs KYC, underwrites, calculates EMIs, or touches money. No PAN, bank statements or AA data are stored. |
+| Overrides | The platform records permitted workflow and technical overrides and does not prevent them: choosing a system other than the recommended one, offering above the eligibility limit, starting installation before sanction. Each carries a reason or acknowledgement and an audit row (earned rule 4). Quote-price override is not supported in V1: the price is the EPC partner's quote. |
+| Commercials | Billing is contractual and off-platform in V1. The platform shows usage counts (seats, Files, active assets) and never blocks access on a commercial threshold. |
+| Decision source | Business answers are frozen in Build Baseline v1.2. Where a decision was not answered, it is a portal setting; open items are built as the baseline states. |
+
+# 1.2 What this build supersedes in the frozen prototype
+The August prototype is a reference for look and feel only. Where it differs from this BRD, this BRD wins. These are the differences, each backed by a business answer or a frozen decision.
+| # | Prototype behaviour | Build behaviour | Source |
+| 1 | Warm and Hot leads both enter the pickup queue automatically | Hot enters automatically; Warm stays with Ecofy until an Ecofy User or Ecofy Admin pushes it | 21 Sep decision · S0.1 |
+| 2 | Pickup SLA targets and colours | No targets; ageing in working hours only (Mon–Fri 10:00–19:00) | S1.1 · S1.2 |
+| 3 | C&I preliminary sizing in the calculator | Calculator off for C&I; shows “EPC quote required”; manual or EPC assessment | S3.2 · C.5 |
+| 4 | Catalogue quote generated from the standard systems price list | Quotes come only from the EPC partner (PDF + amounts). Standard system prices are indicative ranges in the calculator only | Agreed rule 3 · S4.9 |
+| 5 | Assessment → quote → acceptance → financing | Assessment → Ecofy eligibility → EPC quote → offer → OTP and File → sanction. Order switchable in settings | S4.1 |
+| 6 | Caller sees the eligible amount and down payment | Caller sees only “within limit” or “above limit”; amounts only in Ecofy Admin views | S4.6 |
+| 7 | EMI shown in the offer | No EMI calculation, and no EMI in the customer offer. An EMI provided by the lender may be recorded by Ecofy Admin after sanction, and EMI status tracked on the asset | S4.5 · S8 |
+| 8 | Acceptance by OTP or e-Sign | SMS OTP only | S5.2 |
+| 9 | Sanction → disbursement → EPC handover → installation | Installation may start before sanction (warning + acknowledgement) and runs in parallel with S6; payout is recorded after installation (section 4.3) | S6.4 · S7.1 |
+| 10 | Asset risk flags from DPD × battery state of health | No IoT and no risk flags in V1; EMI status (DPD band) recorded by Ecofy Admin as a status only | S8.3 |
+| 11 | Commercial price override on the quote screen | No price override on the platform: the price is the EPC's quote. Technical override (choosing another system) stays, with a reason | Agreed rule 3 · C.9 |
+| 12 | Provisional catalogue quote when power data is missing | Kept, adapted: a provisional EPC quote with a mandatory reason when the assessment is PENDING_TECHNICAL_DATA | Earned rule 3 |
+| 13 | Prototype field names (qid, assess, reqKva, ovReason) and sample people and leads | Use the schema names (accepted_quote_id, assessment, required_inverter_kva, override_reason). Sample data is for demonstration only | Naming rule |
+
+# 1.3 The six earned rules
+Rules earned in the prototype reviews. All six are carried into this build.
+| # | Rule | Where it is built | Status |
+| 1 | Assessment required to complete S3, by calculator or manual / external path, source recorded | M07; assessments.method; S3 → S4 gate | Built |
+| 2 | Recommendation only when segment, capacity and power are known | M07; assessments.recommendation_status (PENDING_TECHNICAL_DATA never collapsed into CUSTOM_REQUIRED); test T19 | Built in v1.3 |
+| 3 | Provisional quote allowed; provisional basis recorded | M09; quotes.provisional + provisional_reason + assessment_id; trigger; test T20 | Built in v1.3 |
+| 4 | Overrides recorded, not prohibited | Section 1; system override with reason; above-limit warning; install before sanction with acknowledgement. Quote-price override is out of V1 (EPC price) | Built |
+| 5 | File locked to a specific accepted_quote_id and version | M10; same-case composite keys from quote to offer to OTP to File; file_lineage_guard checks version, total and the verified OTP chain; File never edited or deleted; tests T25, T26 | Built; hardened in v1.4 |
+| 6 | Ecofy finances, EPC executes, the platform orchestrates, with defined steps | Section 4 state engine (S0 → S8) and the permission matrix | Built |
+
+# 2. Users, roles and access
+| Role | Seats | Org | What they do |
+| Ecofy Admin (EA) | 1 | Ecofy | Uploads and assigns leads in S0; records eligibility, sanction, down payment, disbursement, EMI and buyback; approves calculator releases; sees all Ecofy-visible cases and financing values. |
+| Ecofy User (EU) | 2 (cap) | Ecofy | Calls own leads, sets temperature, pushes Warm leads; comments after handoff; runs the calculator and shows price ranges at S0. |
+| iTarang Admin (IA) | 1 | iTarang | Runs the queue, assigns and returns; edits settings, lists, EPC and financier masters; designs the calculator; routes rejected cases; confirms withdrawals; raises seat caps. |
+| iTarang Caller (IC) | 1 | iTarang | Follow-up, meetings, EPC visits, assessment, quote upload, offer and customer OTP, installation progress; own cases only. |
+| Platform (SYS) | — | Auto-queues Hot leads, runs gates, sends OTP, locks the File, runs jobs (expiry, purge, rollups). |
+
+Visibility rules: users and the caller see only cases assigned to them or qualified by them. iTarang Admin sees every case; Ecofy Admin sees a case only while Ecofy is its lead source or its current financier. Financing amounts are visible only to the role named on the financier (Ecofy Admin for Ecofy). The caller never sees the eligible or sanctioned amount.
+2.2 Permission matrix
+Own = only cases assigned to or qualified by that user. The platform enforces these in the API and again with row-level security in the database.
+| Capability | Ecofy Admin | Ecofy User | iTarang Admin | iTarang Caller |
+| Upload leads · create a lead | Yes | Create at S0 | iTarang-sourced | — |
+| Assign / reassign in S0 | Yes | — |
+| Set temperature · push Warm | Yes | Own | — |
+| Assign from queue · return to Ecofy | — | Yes | — |
+| Reassign within iTarang (S1+) | — | Yes | — |
+| Calls · remarks | Comment | Yes | Own |
+| Meetings · EPC visits | View | View own | Yes | Own |
+| Run calculator · save assessment | Yes | Own (S0) | Yes | Own |
+| Confirm assessment (close S3) | — | Yes | Own |
+| Send for eligibility | — | Yes | Own |
+| Record eligibility (Ecofy) | Yes | — |
+| See eligible amount | Yes | — | Other financiers only | — |
+| Upload EPC quote · compose offer · send OTP | — | Yes | Own |
+| Record sanction / rejection (Ecofy) | Yes | — |
+| Record decision (other financier) · route | — | Yes | — |
+| See sanction values | Yes | — | Other financiers only | — |
+| Trigger re-acceptance | Yes | — |
+| Installation states · photos · letter | View | — | Yes | Own |
+| Down payment · disbursement · EMI · buyback | Yes | — | Other financiers only; status for Ecofy | — |
+| Request withdrawal | — | Yes | Own |
+| Confirm withdrawal after acceptance | — | Yes | — |
+| Calculator designer | Approve / reject | — | Edit · test · submit | — |
+| Settings · lists · masters | View | — | Edit | — |
+| Users · seats | Ecofy users within cap | — | All · raise caps | — |
+| Dashboards | All Ecofy-visible | Own | All | Own |
+| Export CSV (logged) | Yes | — | Yes | — |
+| Audit log | Ecofy-visible | — | All | — |
+
+# 3. System design
+# 3.2 Architecture decisions
+| Decision | What | Why |
+| Modular monolith, own process, own DB | One Next.js codebase with 18 modules behind service interfaces; PM2 processes ecofy-lms (web) and ecofy-worker (jobs); database ecofydb on the shared RDS instance. | Five users do not justify services. Clean module walls let us split later without rewrites. |
+| State changes only through the case state engine | Every stage change goes through one service that checks gates, bumps the version, and writes history, audit and outbox rows in one transaction. | One place to test gates; no stage drift from ad-hoc updates. |
+| Transactional outbox, then BullMQ | Events are rows in outbox_events, published by a relay to BullMQ; handlers are idempotent. | No lost or phantom notifications when a transaction rolls back. |
+| Tenant and role in the database session | Each request transaction sets app.tenant_id, app.user_id and app.role; RLS enforces tenant isolation, worker scope and money visibility. | A bug in one API cannot leak another role's data. |
+| Money in separate *_values tables | Eligible and sanctioned amounts live in eligibility_values and financing_values, readable only by the role named on the row. | Agreed rule 5 enforced by the database, not by UI hiding. |
+| Immutable calculator releases | Calculator values, appliances and systems are versioned releases; Ecofy approves; assessments store release_id. | Any past recommendation can be reproduced and explained. |
+| No free-form formula editor | Admin edits values, lists, rules and texts inside a fixed 9-step formula. | A wrong formula would silently mis-size every customer. |
+| Supabase Auth, own project | Separate auth project for the Ecofy tenant; users and data stay in ecofydb. | User pools never mix with the iTarang CRM. |
+| Presigned S3 uploads | Browser uploads straight to a private bucket; metadata committed after upload; 5-minute URLs. | Files never pass through the app server; nothing is public. |
+
+# 4. Case state engine
+# 4.2 Transitions and gates
+A stage changes only through the state engine. Every call carries If-Match with the case version, checks the gate, and writes stage history, audit and an outbox event in one transaction. Failed gates return GATE_NOT_MET naming the missing condition.
+| From | To | Trigger | Actor | Gate | API |
+| S0 | S1 | Temperature set to Hot | EU / EA (platform moves it) | None: instant, automatic | POST /cases/{id}/temperature |
+| S0 | S1 | Push to iTarang | EU / EA | Temperature is Warm | POST /cases/{id}/push |
+| — | S1 | iTarang-sourced lead created | IA | Consent tick; owner = iTarang | POST /cases |
+| S1 | S2 | Assign to caller | IA | Caller active | POST /cases/{id}/assign |
+| S1 | S0 | Return to Ecofy | IA | Reason from list; goes to the qualifier | POST /cases/{id}/return |
+| S2 | S3 | Advance to assessment | IC / IA | Completed meeting or EPC visit (setting, on) | POST /cases/{id}/advance |
+| S3 | S4 | Confirm assessment | IC / IA | An assessment version exists | POST /assessments/{id}/confirm |
+| S4 | S5 | Send offer (OTP sent) | IC | Eligible with Ecofy (or current financier) · one ACTIVE, unexpired quote · offer composed | POST /offers/{id}/otp |
+| S5 | S6 | Customer OTP verified | Customer, via caller's screen | OTP matches within expiry and attempts; File created and locked | POST /otp/{id}/verify |
+| S4 | Not eligible → next financier | IA | Reason recorded; eligibility requested from the next financier | POST /cases/{id}/route-financier |
+| S6 | S6* | Lower sanction | EA | Sanctioned < accepted total → sub-status REACCEPTANCE_PENDING | POST /cases/{id}/financing/decisions |
+| S6 | Rejected → next financier | IA | Rejection reason recorded | POST /cases/{id}/route-financier |
+| S6* | S7 | Re-acceptance OTP verified | Customer, via caller's screen | Revised acceptance recorded on the same File | POST /otp/{id}/verify |
+| S6 | S7 | Sanction recorded | EA (Ecofy) / IA (other) | No re-acceptance pending | POST /cases/{id}/financing/decisions |
+| S7 | S8 | Disbursement recorded | EA (IA for other financiers) | Sanctioned · installation INSTALLED or COMMISSIONED · photos + customer acceptance letter | POST /cases/{id}/disbursement |
+| Any open | CLOSED | Close / confirmed withdrawal | Stage owner; IA after S5 | Closure reason; withdrawal rules (M14) | POST /cases/{id}/close · /withdrawals |
+| CLOSED | S0 | Reopen | Platform on re-upload / IA | Reason; history kept. Never for a case that reached a File: a new linked case is created instead (database trigger) | POST /cases/{id}/reopen |
+
+4.3 Case stage and installation run in parallel. An installation record may be created and progress while the case is still at S6. The case enters S7 only when the sanction is recorded and no re-acceptance is pending. Installation status (SCHEDULED, IN_PROGRESS, INSTALLED, COMMISSIONED, STOPPED) and case stage are separate state machines until the S7 → S8 gate, which needs both: a sanction, and an installation at INSTALLED or COMMISSIONED with photos and the customer acceptance letter. Starting an installation while the case is at S6 without a sanction shows a warning and needs an acknowledgement, which is audited.
+Sub-statuses: S4 ELIGIBILITY_PENDING · QUOTE_PENDING · OFFER_READY; S5 OTP_SENT; S6 AWAITING_DECISION · REACCEPTANCE_PENDING · REJECTED_ROUTING; S7 INSTALLING · INSTALLED; CLOSED carries closure_reason.
+# 5. Modules
+Eighteen modules in one codebase. Each owns its tables and exposes a service interface; other modules call that interface, never its tables.
+M01  Access, users and seats
+| Purpose | Who can log in, as what, and how many seats each org has. |
+| Users | All; EA and IA manage |
+| Tables | tenants, tenant_domains, orgs, users, seat_limits, seat_ledger, trusted_devices, user_sessions |
+| Events | user.invited, user.deactivated, seat.limit_changed |
+
+| ID | Requirement |
+| FR-01.1 | Login: email and password through Supabase Auth, then POST /auth/session registers the session. |
+| FR-01.2 | Device: a random 32-byte ecofy_device cookie (httpOnly, Secure, SameSite=Lax, host-only, 1 year); only its SHA-256 is stored in trusted_devices. |
+| FR-01.3 | New device (no TRUSTED row for this user and cookie, or trust expired): the platform emails a 6-digit code through SES; hashed; 10-minute expiry; 5 attempts, then a 15-minute lockout; resend after 60 seconds. Verified: device TRUSTED for 30 days (setting). |
+| FR-01.4 | One live session: on activation the Supabase session_id is written to user_sessions. Middleware compares it on every request; any other session gets 401 SESSION_REPLACED and the platform also asks Supabase to sign the user's other sessions out. The database comparison is the control; the Supabase sign-out is a courtesy. |
+| FR-01.5 | Until a session is active (device trusted and session registered), every API call except the /auth routes returns 401. |
+| FR-01.6 | IA can revoke all trusted devices of a user; deactivation revokes them automatically. |
+| FR-01.7 | EA invites and deactivates Ecofy Users within the seat cap; IA manages all users and raises caps. |
+| FR-01.8 | Seat cap enforced by one conditional UPDATE; every change written to seat_ledger (the billing meter). |
+| FR-01.9 | Deactivation removes access at once; the user's open cases appear in the admin's unassigned view. |
+| FR-01.10 | Password reset by emailed link; all auth events audited. |
+
+M02  Admin portal settings and masters
+| Purpose | Everything business left open becomes an editable setting. |
+| Users | IA edits; EA views |
+| Tables | settings, list_items, working_hours, holidays, epc_partners, financiers |
+| Events | setting.changed, list.changed |
+
+| ID | Requirement |
+| FR-02.1 | IA edits every setting in Baseline section 3 (gates, retention, ageing bands, quote validity, order of S4 tracks, refresh reminder); old and new values logged. |
+| FR-02.2 | Lists are editable (add, rename, reorder, deactivate); codes are never deleted, so history stays readable. |
+| FR-02.3 | Working calendar (Mon–Fri 10:00–19:00) and holidays drive every ageing figure. |
+| FR-02.4 | EPC partner master: name, contact, pincodes served, segments, active. |
+| FR-02.5 | Financier master: Ecofy as default; others added by IA, each with the role allowed to see its values. |
+| FR-02.6 | Settings served from a cache, invalidated on change. |
+
+M03  Lead intake
+| Purpose | Get Ecofy's leads in cleanly, with consent, without duplicates. |
+| Users | EA uploads; EU and IA create single leads |
+| Tables | import_batches, import_rows, column_mappings, customers, cases |
+| Events | import.committed, case.created, case.reopened |
+
+| ID | Requirement |
+| FR-03.1 | Lead upload template v0.3 downloadable from the upload screen. |
+| FR-03.2 | XLSX or CSV up to 5,000 rows, uploaded straight to S3. |
+| FR-03.3 | Column mapping: headers auto-matched; the rest mapped once and saved per source. |
+| FR-03.4 | Validation per template rules; preview shows created, duplicate, reopened and rejected counts before commit. |
+| FR-03.5 | Commit needs the consent confirmation tick (text and time logged) and runs as a background job; the import report lists every row with its reason. |
+| FR-03.6 | Mobile normalised to +91. Match on an open case: linked, no new case. Match on a closed case: reopened with history, unless that case reached a File, in which case a new case is created and linked to it. |
+| FR-03.7 | assign_to, when it names an active Ecofy User, assigns on import; otherwise the case is unassigned. |
+| FR-03.8 | Single lead: EU creates at S0 with a consent tick; IA creates an iTarang-sourced lead that starts at S1, owned by iTarang. |
+| FR-03.9 | Imports by IA create iTarang-owned leads that start at S1. |
+| FR-03.10 | Retention: the uploaded file and the raw row data are deleted 30 days after commit (setting); row numbers and error codes stay for the import report, without raw data. |
+| FR-03.11 | Template labels are stored as codes (C&I → CI, Individual → INDIVIDUAL, Y → true, DD-MM-YYYY → date, mobile → +91 format); the full mapping is in section 7.3. |
+
+M04  Ecofy qualification (S0)
+| Purpose | Ecofy works its own base and decides what reaches iTarang. |
+| Users | EA, EU |
+| Tables | cases, case_assignments, activities |
+| Events | case.assigned, case.temperature_set, case.pushed, case.closed |
+
+| ID | Requirement |
+| FR-04.1 | EA assigns, bulk-assigns and reassigns S0 cases (reason on reassign). |
+| FR-04.2 | EU sees only own cases; logs calls (outcome mandatory) and comments. |
+| FR-04.3 | Temperature: Cold, Warm, Hot, Not interested. Hot moves to S1 at once; Warm moves only when EU or EA pushes; Not interested closes with a reason. |
+| FR-04.4 | The qualifying user is stored; returns from iTarang go back to that user. |
+| FR-04.5 | After handoff, Ecofy users can comment but not change the stage; documents and recordings only if the setting allows. |
+| FR-04.6 | EU can run the calculator, save an assessment and quote price ranges at S0. |
+
+M05  Queue and assignment (S1)
+| Purpose | iTarang picks up what Ecofy hands over. |
+| Users | IA |
+| Tables | cases, case_assignments, case_returns |
+| Events | case.assigned, case.returned |
+
+| ID | Requirement |
+| FR-05.1 | Queue shows Hot first, then Warm by push time, with ageing in working hours. No pickup targets or SLA colours. |
+| FR-05.2 | Assigning a caller moves the case to S2. |
+| FR-05.3 | Return to Ecofy with a reason from the list and a note: case goes back to S0 and to its qualifier. |
+| FR-05.4 | Time from Hot to the caller's first call is recorded and reported. |
+| FR-05.5 | IA reassigns within iTarang at any stage from S1; reason mandatory; stage unchanged. |
+
+M06  Follow-up, meetings and EPC visits (S2)
+| Purpose | Get the customer to a meeting or site visit. |
+| Users | IC, IA |
+| Tables | activities, appointments |
+| Events | activity.logged, appointment.scheduled, appointment.completed |
+
+| ID | Requirement |
+| FR-06.1 | Calls (outcome mandatory), remarks and next follow-up date; append-only. |
+| FR-06.2 | Book an appointment with type, scheduled date and time, and booking remarks. |
+| FR-06.3 | After it happens, the caller records the actual date and time and the meeting remarks; both are mandatory to mark it completed. |
+| FR-06.4 | No-show or cancellation needs a reason. Rescheduling creates a new appointment linked to the old one, so every scheduled time stays in history. |
+| FR-06.5 | The case shows each appointment with scheduled time, actual time, booking remarks and meeting remarks side by side. |
+| FR-06.6 | EPC visit: IA or IC appoints an EPC partner with a date; the caller records the EPC's feedback and photos. |
+| FR-06.7 | Gate to S3: at least one completed meeting or EPC visit (setting, on). |
+| FR-06.8 | Close from S2 with a reason from the closure list. |
+| FR-06.9 | Follow-up and appointment reminders in-app; overdue list for the caller and IA. |
+
+M07  Assessment and calculator (S3)
+| Purpose | Size the system and recommend a standard one. |
+| Users | All run estimates; EU, IC and IA save |
+| Tables | assessments, calc_releases, calc_appliances, calc_systems |
+| Events | assessment.saved, assessment.confirmed |
+
+| ID | Requirement |
+| FR-07.1 | Quick estimate for any role, never stored. |
+| FR-07.2 | Saved assessment by calculator (stores release_id, inputs and every step's result) or manual entry (battery kWh, inverter kVA, solar kWp, source note). |
+| FR-07.3 | Every assessment has one of three recommendation states, stored in recommendation_status: RECOMMENDED (a standard system fits), CUSTOM_REQUIRED (power data present but no standard system fits), PENDING_TECHNICAL_DATA (a need the formula requires cannot be computed: power needs an appliance list, running load or sanctioned load; battery needs an appliance list, running load or monthly units; solar needs monthly units; a manual entry needs its sizes). Pending is never shown or stored as custom (earned rule 2). |
+| FR-07.4 | A recommendation is made only when segment, capacity need and power need are all known. |
+| FR-07.5 | System type follows the product interest: Solar + storage, Storage only and Solar only each match only systems of that type; Not sure considers all types. Phase must match. |
+| FR-07.6 | Solar only: backup hours are not asked; steps 2 to 6 are skipped; the match uses solar kWp and phase only. Storage only: the solar step is skipped. Solar + storage: all steps. |
+| FR-07.7 | Alternatives: one smaller and one larger standard system of the same type, where they exist. |
+| FR-07.8 | Caller may pick another system; reason mandatory. |
+| FR-07.9 | Versions: the latest is current; older ones kept. |
+| FR-07.10 | S3 completes when IC or IA confirms an assessment; an S0 Ecofy run can be confirmed in one click. |
+| FR-07.11 | C&I: calculator hidden; manual or EPC sizing; pricing shows “EPC quote required”. |
+
+M08  Calculator Designer and standard systems
+| Purpose | Let iTarang Admin design the calculator safely. |
+| Users | IA edits; EA approves |
+| Tables | calc_releases, calc_appliances, calc_systems |
+| Events | calc.release_submitted, calc.release_approved, calc.release_rejected |
+
+| ID | Requirement |
+| FR-08.1 | IA creates a draft from the published release; one draft at a time. |
+| FR-08.2 | Systems import converts template labels to stored codes (section 7.3); rows failing a rule are rejected with the reason. |
+| FR-08.3 | Editable: segments on or off, input methods, values, appliances (watts, motor flag, starting multiplier), recommendation rules, display texts, standard systems (edit rows or import template v0.2). |
+| FR-08.4 | Test bench runs any input against the draft and shows every step; the worked example is preloaded. |
+| FR-08.5 | Submit; EA approves (the release is published and the previous one retired) or rejects with a note. |
+| FR-08.6 | Restore: any older release is copied into a new draft. |
+| FR-08.7 | Systems whose price date is older than the refresh setting are flagged to IA. |
+| FR-08.8 | The 9-step formula is fixed; there is no free-form formula editing in V1. |
+
+M09  Offer: eligibility and EPC quote (S4)
+| Purpose | Put a priced, fundable offer in front of the customer. |
+| Users | IC, IA, EA |
+| Tables | eligibility_checks, eligibility_values, quote_requests, quotes, offers |
+| Events | eligibility.requested, eligibility.decided, quote.uploaded, quote.expired, offer.composed |
+
+| ID | Requirement |
+| FR-09.1 | Order follows the setting; default is eligibility first, then the EPC quote. |
+| FR-09.2 | IC sends the case for eligibility; it lands in EA's eligibility queue. |
+| FR-09.3 | EA records Eligible (maximum amount), Not eligible (reason) or Info needed (note to the caller). The amount is stored in eligibility_values, readable by EA only. |
+| FR-09.4 | IC logs the quote request (EPC partner, channel) and uploads the EPC quote PDF with system, equipment, installation, GST, validity and optional notes. A new version supersedes the old; one ACTIVE quote per case; every version stays downloadable. |
+| FR-09.5 | Offer built from the ACTIVE quote: system, equipment, installation, GST, total, and “financing through Ecofy, subject to sanction”. No EMI. |
+| FR-09.6 | The database function offer_within_limit compares the total with the maximum eligible amount and returns only yes or no to the caller's session; the amount itself is never readable by the caller. Above limit shows a warning and does not block. |
+| FR-09.7 | Every quote names the assessment it answers (assessment_id). When that assessment is PENDING_TECHNICAL_DATA, the quote must be marked provisional with a recorded reason; a database trigger enforces it (earned rule 3). |
+| FR-09.8 | A provisional quote can be offered and accepted (setting on); the offer, the File and Ecofy's eligibility and sanction screens show “Provisional” with the reason. |
+| FR-09.9 | Expired quotes cannot be offered; a job marks them EXPIRED on their validity date. |
+| FR-09.10 | Not eligible: IA routes to the next financier or closes the case. |
+
+M10  Acceptance and File (S5)
+| Purpose | Lock the customer's yes to a specific quote. |
+| Users | IC; EA for re-acceptance |
+| Tables | otp_challenges, files, file_acceptances, sms_messages |
+| Events | otp.sent, otp.verified, otp.failed, file.locked |
+
+| ID | Requirement |
+| FR-10.1 | Sending the offer sends an SMS OTP on the DLT template and moves the case to S5. |
+| FR-10.2 | OTP: 6 digits, stored hashed, expires in 10 minutes (setting), 5 attempts, resend after 60 seconds, at most 3 sends per offer per hour. |
+| FR-10.3 | Verified: File created (file_no, accepted_quote_id, quote version, total, time, OTP id) and locked; case moves to S6; Ecofy is notified with the offer and the quote. |
+| FR-10.4 | The database checks every File on insert: quote, version and OTP belong to the same case; the total equals the quote total; the quote is active and in date; the OTP is a verified acceptance OTP on an offer built on that same quote. A File is never updated; quote, offer and OTP terms are never edited, only their status. |
+| FR-10.5 | A File is never deleted or reversed; later changes are new acceptances on the same File. |
+| FR-10.6 | Re-acceptance (from M11): EA triggers it; the SMS with the financed amount and down payment is built in EA's session from financing_values. The amounts are never written to the offer, so the caller sees status only. |
+
+M11  Financing and financier routing (S6)
+| Purpose | Record the financier's decision, and route to another when it fails. |
+| Users | EA; IA for other financiers |
+| Tables | financing_decisions, financing_values |
+| Events | financing.decided, financier.routed, reacceptance.triggered |
+
+| ID | Requirement |
+| FR-11.1 | EA's financing queue lists Files awaiting a decision. |
+| FR-11.2 | EA records Sanctioned (amount; optional down payment, tenure, EMI, lender file number) or Rejected (reason mandatory). |
+| FR-11.3 | Sanctioned below the accepted total: sub-status REACCEPTANCE_PENDING and a re-acceptance through M10. |
+| FR-11.4 | Rejected: IA routes to the next financier (attempt number + 1) or closes the case as rejected by all financiers. |
+| FR-11.5 | For other financiers IA records the decision; values visible to IA only. |
+| FR-11.6 | Ecofy Admin sees a case only while Ecofy is the lead source or the current financier; enforced by row-level security (default for an open item). |
+| FR-11.7 | No KYC document types exist; PAN and bank statements cannot be uploaded. |
+
+M12  Installation and disbursement (S7)
+| Purpose | Track the install and record the payout. |
+| Users | IC, IA, EA |
+| Tables | installations, installation_events, down_payments, disbursements, documents |
+| Events | installation.status_changed, downpayment.recorded, disbursement.recorded |
+
+| ID | Requirement |
+| FR-12.1 | IA or IC creates the installation with an EPC partner and date; states run NOT_STARTED, SCHEDULED, IN_PROGRESS, INSTALLED, COMMISSIONED, or STOPPED with a reason. |
+| FR-12.2 | Installation may start before sanction while the gate is off; it is flagged and IA is warned. |
+| FR-12.3 | INSTALLED needs at least one installation photo and the signed customer acceptance letter. |
+| FR-12.4 | EA records the down payment Ecofy received (date, amount, reference); IA records it for other financiers. Amounts are visible only to the financier's role. |
+| FR-12.5 | EA (IA for other financiers) records the disbursement once sanctioned and installed; the case moves to S8 and an asset is created. |
+| FR-12.6 | After-sales stays outside the platform. |
+
+M13  Active asset (S8)
+| Purpose | Keep the financed asset's status visible. |
+| Users | EA; others view status |
+| Tables | assets, emi_status_updates, asset_events |
+| Events | asset.activated, emi.updated, asset.event_recorded |
+
+| ID | Requirement |
+| FR-13.1 | Asset created at disbursement with a snapshot of the installed system. |
+| FR-13.2 | EA records EMI status (as-of date, days-past-due band) under Ecofy's own policy; no frequency enforced. |
+| FR-13.3 | EA records buyback and redeployment. |
+| FR-13.4 | No IoT data: battery risk flags stay off. |
+
+M14  Withdrawal and closure
+| Purpose | Handle a customer who backs out, cleanly at every stage. |
+| Users | IC requests; IA confirms; EA and IA follow up |
+| Tables | withdrawals, cases |
+| Events | withdrawal.requested, withdrawal.confirmed, case.closed, case.reopened |
+
+| ID | Requirement |
+| FR-14.1 | Before acceptance (S0–S4): the stage owner closes with a reason. |
+| FR-14.2 | After acceptance: IC requests with a reason; IA confirms; the case closes and EA is alerted to stop. |
+| FR-14.3 | After sanction: EA marks the sanction cancelled; IA marks the EPC informed. |
+| FR-14.4 | During installation: installation set to STOPPED with evidence. |
+| FR-14.5 | After disbursement: not a withdrawal; handled by Ecofy outside the platform. |
+| FR-14.6 | EPC cancellation charges are Ecofy's and settled outside the platform. |
+| FR-14.7 | Reopen: on a re-upload match, or by IA with a reason; history kept. A case that reached a File is never reopened; a new linked case starts instead. |
+
+M15  Documents and recordings
+| Purpose | Store evidence safely and delete what must not be kept. |
+| Users | Everyone who can see the case |
+| Tables | documents |
+| Events | document.uploaded, document.purged |
+
+| ID | Requirement |
+| FR-15.1 | Upload by presigned PUT (up to 25 MB; PDF, JPG, PNG, MP3, M4A, WAV); SHA-256 stored; metadata committed after upload. |
+| FR-15.2 | Types from the list. The database rejects any document type that looks like KYC (PAN, Aadhaar, KYC, bank, passport, voter, ITR, salary, CIBIL), so one can never be added. |
+| FR-15.3 | Call recordings need a consent tick and are deleted automatically after 60 days (setting); deletion logged. |
+| FR-15.4 | Downloads by presigned GET valid for 5 minutes; every download logged. |
+| FR-15.5 | Document visibility follows case visibility. |
+
+M16  Notifications
+| Purpose | Tell the right person at the right time. |
+| Users | All staff; customers get OTP only |
+| Tables | notifications, sms_messages |
+| Events | notification.created |
+
+| ID | Requirement |
+| FR-16.1 | In-app bell for assignment, return, push, eligibility request and decision, quote expiry, OTP verified, sanction or rejection, withdrawal, calculator approval request. |
+| FR-16.2 | Email for invites, resets and an optional daily admin digest. |
+| FR-16.3 | Customer SMS only for OTP (acceptance and re-acceptance). |
+| FR-16.4 | Appointment reminder 60 minutes before, in-app. |
+
+M17  Dashboards and reports
+| Purpose | Show where every case is, and who is moving them. |
+| Users | Admins all; users own |
+| Tables | funnel_daily, v_case_ageing (plus live queries) |
+| Events | export.generated |
+
+| ID | Requirement |
+| FR-17.1 | Admin funnel: counts and conversion by stage, user, segment and period. |
+| FR-17.2 | Ageing: time in stage and total open time, in working hours, in the configured bands. |
+| FR-17.3 | Per user: calls, appointments scheduled vs held, no-show rate, EPC visits, assessments, quotes uploaded, offers, Files, Hot to first call. |
+| FR-17.4 | Users see their own funnel, status and ageing only. |
+| FR-17.5 | CSV export for admins only; every export logged with its filters; mobile masked in lists. |
+| FR-17.6 | Financing values appear only in EA's reports. |
+| FR-17.7 | Usage view for EA and IA: seats by role, Files created per month and to date, active assets. Counts only; nothing is blocked. |
+
+M18  Audit and compliance
+| Purpose | Prove who did what, and hold only what we should. |
+| Users | Admins |
+| Tables | audit_log, outbox_events, import_batches (consent) |
+| Events | — |
+
+| ID | Requirement |
+| FR-18.1 | Every state change, assignment, value, setting, export and login is written to audit_log in the same transaction. |
+| FR-18.2 | Case timeline merges stage history, activities, documents and decisions. |
+| FR-18.3 | Consent: per-lead fields plus the upload confirmation. |
+| FR-18.4 | Exit: 90 days read-only, then export (CSV and documents), then the database is dropped. |
+| FR-18.5 | No KYC, PAN, bank or AA data is ever stored. |
+
+# 6. API structure
+| Contract | ecofy_openapi_v1.0.1.yaml is the request and response contract for every endpoint; this catalogue is its summary. If they differ, the OpenAPI file wins. |
+| Base path | https://ecofy.itarang.com/api/v1 · JSON · Next.js route handlers calling module services; modules never read each other's tables directly. |
+| Auth | Supabase session in an httpOnly, host-only cookie. Middleware resolves the tenant from the host, loads the user and role, and opens a transaction with SET LOCAL app.tenant_id, app.user_id, app.role. |
+| Responses | Success: { data, meta }. Error: { error: { code, message, details, requestId } }. |
+| Error codes | VALIDATION_FAILED 422 · UNAUTHENTICATED 401 · SESSION_REPLACED 401 · DEVICE_VERIFICATION_REQUIRED 401 · FORBIDDEN 403 · NOT_FOUND 404 · VERSION_CONFLICT 409 · GATE_NOT_MET 409 (names the failed gate) · SEAT_LIMIT 409 · RATE_LIMITED 429. |
+| Concurrency | Case-changing calls send If-Match: <case version>; a mismatch returns VERSION_CONFLICT. |
+| Idempotency | Idempotency-Key header required on OTP send, import commit, quote upload commit and offer creation; stored in idempotency_keys; a replay returns the first result for 24 hours; the same key with a different body returns 422. |
+| Pagination | Cursor based: ?cursor=&limit= (max 100); filters as query parameters. |
+| Uploads | Three steps: POST .../upload-url → PUT to S3 → POST commit with checksum. |
+| Money | Whole rupees as integers. Fields a role may not see are omitted, not sent as null. |
+| Time | ISO-8601 in UTC; the UI shows IST. |
+| Rate limits | Login 5 per minute per IP · OTP send 3 per offer per hour · OTP verify 5 attempts. |
+| Versioning | /v1 now; breaking changes go to /v2. |
+
+# 6.2 Endpoint catalogue
+All paths are under /api/v1. Roles shown are the only ones allowed; “scoped” means the case visibility rules apply.
+| Module | Method | Path | Roles | Purpose |
+| M01 | POST | /auth/session | All | Register the Supabase session; checks the device |
+| M01 | POST | /auth/device/verify · /auth/device/resend | All | Verify or resend the emailed device code |
+| M01 | POST | /auth/logout | All | End the session |
+| M01 | GET | /me | All | Current user, role, org, permissions |
+| M01 | GET | /users | EA, IA | List users (EA: Ecofy only) |
+| M01 | POST | /users | EA, IA | Invite a user (seat check) |
+| M01 | PATCH | /users/{id} | EA, IA | Deactivate, reactivate, rename |
+| M01 | POST | /users/{id}/reset-password | EA, IA | Send reset link |
+| M01 | GET · PATCH | /seats · /seats/{role} | IA | View seats; raise or lower a cap |
+| M01 | POST | /users/{id}/revoke-devices | IA | Revoke all trusted devices of a user |
+| M02 | GET · PATCH | /settings · /settings/{key} | IA (EA view) | Read and change settings |
+| M02 | GET · POST · PATCH | /lists/{listCode}/items | IA | Manage list items |
+| M02 | GET · PUT | /calendar | IA | Working hours and holidays |
+| M02 | GET · POST · PATCH | /epc-partners | IA | EPC partner master |
+| M02 | GET · POST · PATCH | /financiers | IA | Financier master |
+| M03 | GET | /imports/template | EA, IA | Download lead upload template v0.3 |
+| M03 | POST | /imports | EA, IA | Start an import; returns presigned upload URL |
+| M03 | POST | /imports/{id}/mapping | EA, IA | Save column mapping |
+| M03 | POST | /imports/{id}/validate | EA, IA | Dry run; counts and row errors |
+| M03 | POST | /imports/{id}/commit | EA, IA | Commit with consent confirmation (Idempotency-Key) |
+| M03 | GET | /imports/{id} · /imports/{id}/report.csv | EA, IA | Status and row-level report |
+| M03 | POST | /cases | EU, EA, IA | Create a single lead (EU at S0; IA iTarang-sourced at S1) |
+| M04 | GET | /cases | All (scoped) | List cases with filters (stage, temperature, user, ageing) |
+| M04 | GET | /cases/{id} · /cases/{id}/timeline | All (scoped) | Case detail and timeline |
+| M04 | POST | /cases/{id}/assign · /cases/bulk-assign | EA (S0), IA (S1+) | Assign or reassign (reason) |
+| M04 | POST | /cases/{id}/temperature | EU, EA | Set temperature; Hot auto-queues |
+| M04 | POST | /cases/{id}/push | EU, EA | Push a Warm lead to iTarang |
+| M04 | POST | /cases/{id}/close | Stage owner | Close with a reason (before acceptance) |
+| M05 | GET | /queue | IA | Hot first, then Warm, with ageing |
+| M05 | POST | /cases/{id}/return | IA | Return to Ecofy with a reason |
+| M06 | GET · POST | /cases/{id}/activities | All (scoped) | Calls, remarks, comments, follow-ups |
+| M06 | GET · POST | /cases/{id}/appointments | IC, IA | Book a meeting or EPC visit |
+| M06 | PATCH | /appointments/{id} | IC, IA | Reschedule, complete, no-show, EPC feedback |
+| M06 | POST | /cases/{id}/advance | IC, IA | S2 → S3 (meeting gate) |
+| M07 | POST | /calculator/estimate | All | Quick estimate, not stored |
+| M07 | GET · POST | /cases/{id}/assessments | EU (S0), IC, IA | List or save an assessment |
+| M07 | POST | /assessments/{id}/confirm | IC, IA | Confirm; S3 → S4 |
+| M08 | GET · POST | /calculator/releases | IA (EA view) | List releases; create a draft |
+| M08 | GET · PATCH | /calculator/releases/{id} | IA | Edit draft values, rules, texts |
+| M08 | PUT | /calculator/releases/{id}/appliances | IA | Replace the draft's appliance list |
+| M08 | PUT · POST | /calculator/releases/{id}/systems · /systems/import | IA | Edit or bulk-import standard systems |
+| M08 | POST | /calculator/releases/{id}/test | IA, EA | Test bench: every step's result |
+| M08 | POST | /calculator/releases/{id}/submit | IA | Send for Ecofy approval |
+| M08 | POST | /calculator/releases/{id}/approve · /reject | EA | Publish or reject with a note |
+| M08 | POST | /calculator/releases/{id}/restore | IA | Copy an old release into a new draft |
+| M09 | POST | /cases/{id}/eligibility | IC, IA | Send for eligibility |
+| M09 | GET | /eligibility-queue | EA | Cases awaiting eligibility |
+| M09 | POST | /eligibility/{id}/decision | EA; IA for other financiers | Eligible (amount), not eligible, info needed |
+| M09 | POST · PATCH | /cases/{id}/quote-requests · /quote-requests/{id} | IC, IA | Log a quote request and its status |
+| M09 | POST | /cases/{id}/quotes/upload-url · /cases/{id}/quotes | IC, IA | Upload an EPC quote (Idempotency-Key) |
+| M09 | POST · GET | /cases/{id}/offers · /offers/{id} | IC, IA | Compose and view the offer (within / above limit) |
+| M10 | POST | /offers/{id}/otp | IC, IA | Send the OTP; S4 → S5 (Idempotency-Key) |
+| M10 | POST | /otp/{challengeId}/verify | IC, IA | Verify; creates and locks the File; S5 → S6 |
+| M10 | GET | /files/{id} | All (scoped) | File record and acceptances |
+| M11 | GET | /financing-queue | EA (IA for others) | Files awaiting a decision |
+| M11 | POST | /cases/{id}/financing/decisions | EA; IA for others | Sanction or reject with values |
+| M11 | POST | /cases/{id}/reacceptance | EA | Trigger re-acceptance OTP |
+| M11 | POST | /cases/{id}/route-financier | IA | Route to the next financier (from S4 or S6) |
+| M12 | POST · PATCH | /cases/{id}/installation · /installations/{id} | IC, IA | Create and move installation states |
+| M12 | POST | /cases/{id}/down-payment | EA; IA for others | Record the down payment received |
+| M12 | POST | /cases/{id}/disbursement | EA; IA for others | Record the payout; S7 → S8 |
+| M13 | GET | /assets · /assets/{id} | EA, IA | Asset list and detail |
+| M13 | POST | /assets/{id}/emi-status · /assets/{id}/events | EA | EMI status; buyback or redeployment |
+| M14 | POST | /cases/{id}/withdrawals | IC, IA | Request a withdrawal |
+| M14 | POST | /withdrawals/{id}/confirm · /reject | IA | Confirm or reject |
+| M14 | POST | /withdrawals/{id}/sanction-cancelled · /epc-informed | EA · IA | Follow-up steps |
+| M14 | POST | /cases/{id}/reopen | IA | Reopen a closed case with a reason |
+| M15 | POST | /cases/{id}/documents/upload-url · /cases/{id}/documents | Scoped | Upload a document or recording |
+| M15 | GET | /documents/{id}/download-url | Scoped | Presigned download (logged) |
+| M15 | DELETE | /documents/{id} | EA, IA | Soft delete with a reason |
+| M16 | GET · POST | /notifications · /notifications/{id}/read | All | Bell list; mark read |
+| M17 | GET | /dashboards/funnel · /ageing · /users/{id} | Admins; users own | Dashboard data |
+| M17 | GET | /reports/{code}.csv | EA, IA | CSV export (logged) |
+| M17 | GET | /usage | EA, IA | Monthly usage counts (never blocks) |
+| M18 | GET | /audit | EA, IA | Audit search by case, user, action, date |
+| Ops | GET | /health | Public (no data) | DB, Redis, S3 checks for uptime monitoring |
+| Ops | POST | /webhooks/sms/delivery | Gupshup (shared secret) | SMS delivery reports |
+
+# 7. Database
+| Engine | PostgreSQL 16 on the shared RDS instance (ap-south-1); database ecofydb; app role ecofy_app. |
+| Keys | UUID primary keys (gen_random_uuid); identity bigints for append-only logs; case numbers ECF-1001 onwards. |
+| Tenancy | tenant_id on every table except tenants itself, child tables included; RLS enabled on every table; policies read app.tenant_id, app.user_id and app.role set per transaction. The host lookup runs before a tenant is known, so it goes only through resolve_tenant(). Migrations and seeds run as the owner role; the app connects as ecofy_app, which cannot write tenants or tenant_domains. |
+| Money | Whole rupees as integers; financing amounts only in eligibility_values, financing_values, down_payments and disbursements, each guarded by RLS. |
+| Immutable terms | files: no UPDATE or DELETE for the app. quotes, offers and otp_challenges: no DELETE; UPDATE granted on status columns only, so amounts, versions and links can never change after insert. |
+| History | Append-only tables (audit_log, activities, case_stage_history, seat_ledger, installation_events, file_acceptances): UPDATE and DELETE revoked from the app role. |
+| Migrations | Drizzle schema generated from ecofy_schema_v1.4.sql (drizzle-kit pull), then drizzle-kit migrate in the pipeline. Expand-then-contract for breaking changes. |
+| Functions | offer_within_limit(case, total) and resolve_tenant(host): SECURITY DEFINER, fixed search_path, return only what the caller may know. Triggers: block_reopen_with_file (a case with a File never reopens), quote_provisional_guard (earned rule 3), file_lineage_guard and acceptance_lineage_guard (the File matches its quote and its verified OTP chain). v_case_ageing is a security_invoker view, so RLS applies through it. |
+| Tested | ecofy_schema_tests_v1.4.sql: 26 self-checking tests that raise on failure, so CI stops. They cover RLS and tenant_id on every table, the host lookup, tenant isolation of child tables, caller scope and hidden amounts, the within-limit answer, Ecofy scope before and after routing, payout visibility, seat cap, audit immutability, appointment rules, KYC document types, File reopen, recommendation states, provisional quotes, trusted devices, standard-system and release rules, the consent confirmation, and the File lineage chain (case, version, total, verified OTP, no edits). Mutation-checked: removing a protection makes its test fail. |
+
+# 7.2 Table catalogue (53 tables)
+| Domain | Table | Purpose | Key rules |
+| Tenancy | tenants | The Ecofy tenant | status ACTIVE / READ_ONLY / EXITED; RLS: own row only; app cannot write |
+| Tenancy | tenant_domains | Host to tenant | host unique; read only through resolve_tenant(); app cannot write |
+| Tenancy | orgs | Ecofy and iTarang | one per kind per tenant |
+| Tenancy | users | Staff users and roles | email unique per tenant; auth_user_id unique |
+| Tenancy | seat_limits | Seat cap per role | seats_used ≤ seat_limit (CHECK) |
+| Tenancy | seat_ledger | Every seat change | insert-only |
+| Tenancy | user_sessions | One live session per user | PK user_id; tenant_id + RLS |
+| Tenancy | trusted_devices | Devices verified by email code | PK (user, device hash); TRUSTED needs an expiry; tenant_id + RLS |
+| Masters | settings | Portal settings (jsonb) | PK (tenant, key) |
+| Masters | list_items | All editable lists | unique (tenant, list, code); KYC-like document types rejected |
+| Masters | working_hours · holidays | Ageing calendar | end after start |
+| Masters | epc_partners | EPC partner master | pincodes, segments arrays |
+| Masters | financiers | Financier master | one default; values_visible_to role |
+| Masters | column_mappings | Saved upload mappings | unique per source |
+| Intake | import_batches | One upload | cannot be COMMITTED without consent attestation |
+| Intake | import_rows | Row results and errors | unique (batch, row); tenant_id + RLS; raw data purged after retention |
+| Case | customers | The person or business | unique (tenant, mobile); +91 mobile and pincode checks; consent mandatory |
+| Case | cases | The case from S0 to S8 | one open case per customer; closure reason when CLOSED; version for If-Match; a case with a File never reopens (trigger); previous_case_id links a new case |
+| Case | case_stage_history | Every stage change | insert-only |
+| Case | case_assignments | Assignment history | one open assignment per case |
+| Case | case_returns | Returns to Ecofy | reason code required |
+| S2 | activities | Calls, remarks, comments, follow-ups | insert-only; call needs outcome |
+| S2 | appointments | Meetings and EPC visits: scheduled vs actual | completed needs actual time + meeting remarks; no-show / cancel needs reason; EPC visit needs partner |
+| S3 | calc_releases | Versioned calculator | one PUBLISHED; one open draft |
+| S3 | calc_appliances | Appliances per release | watts > 0; multiplier ≥ 1; tenant_id + RLS |
+| S3 | calc_systems | Standard systems per release | usable ≤ nominal; max ≥ min prices; tenant_id + RLS |
+| S3 | assessments | Saved sizing, versioned | calculator runs need release_id; override needs a reason; recommendation_status agrees with recommended_code |
+| S4 | eligibility_checks | Eligibility requests and results | one open per case and financier; not eligible needs reason |
+| S4 | eligibility_values | Maximum eligible amount | RLS: only the named role |
+| S4 | quote_requests | Requests to EPC partners | channel email / WhatsApp / phone |
+| S4 | quotes | EPC quotes (PDF + amounts + validity + notes), versioned | one ACTIVE per case; total computed; PDF and assessment of the same case; amounts never edited (status only); assessment_id required; provisional needs a reason; trigger forces provisional on pending assessments |
+| S4 | offers | Offer snapshot | one live offer per case; quote must be of the same case (composite FK); app may change status and sent_at only |
+| S5 | otp_challenges | OTP sends and checks | hashed code; ≤ 5 attempts; one live per offer; idempotency key; offer of the same case; app may change status, attempts, verified_at, provider id only |
+| S5 | files | The File (the billable event) | one per case; quote, version and OTP of the same case (composite FKs); total = quote total and OTP verified on an offer of that quote (trigger); never updated or deleted |
+| S5 | file_acceptances | Initial and revised acceptances | insert-only; same case; INITIAL = the File's own OTP; REVISED needs a verified re-acceptance OTP |
+| S6 | financing_decisions | Each financier attempt | one open per case; rejection needs reason; File of the same case |
+| S6 | financing_values | Sanction amounts and terms | RLS: only the named role |
+| S7 | installations | Installation per case | stopped needs reason; before-sanction flag |
+| S7 | installation_events | Installation history | insert-only |
+| S7 | down_payments | Down payment received | RLS: only the financier's role |
+| S7 | disbursements | Payout record | one per case; RLS: only the financier's role |
+| S8 | assets | Installed, financed asset | one per case |
+| S8 | emi_status_updates | EMI status by date | unique (asset, as-of date) |
+| S8 | asset_events | Buyback and redeployment | type checked |
+| Cross | withdrawals | Customer withdrawals | one open per case |
+| Cross | documents | All files in S3 | ≤ 25 MB; recordings need consent and retention date |
+| Cross | notifications | In-app bell | indexed unread by user |
+| Cross | sms_messages | SMS sent and delivery | DLT template id stored |
+| Cross | idempotency_keys | Stored results of repeat-safe calls | PK (tenant, key); purged after 24 hours |
+| Cross | audit_log | Who did what | INSERT-only for the app role |
+| Cross | outbox_events | Events to publish | written in the business transaction |
+| Reporting | funnel_daily · v_case_ageing | Dashboard rollup and ageing view | nightly rollup |
+
+# 7.3 Upload templates to database
+How each template column is stored. Labels in the templates are for people; the database stores codes. Any row that fails a conversion is rejected with the reason.
+## Lead upload template v0.3
+| Template column | Stored in | Conversion |
+| customer_name | customers.full_name | Trimmed |
+| mobile | customers.mobile_e164 | 10 digits → +91XXXXXXXXXX; dedupe key |
+| segment | cases.segment | RESI → RESI, ESS → ESS, C&I → CI |
+| pincode | customers.pincode | 6 digits |
+| consent_obtained | customers.consent_obtained | Y → true (N or blank rejected) |
+| consent_date | customers.consent_date | DD-MM-YYYY → date; not in the future |
+| consent_source | customers.consent_source | List code |
+| city · state · address | customers.city · state · address | Trimmed |
+| customer_type | customers.customer_type | Individual → INDIVIDUAL, Business → BUSINESS |
+| business_name | customers.business_name | Required when Business |
+| ecofy_lead_id | cases.ecofy_lead_id | Text |
+| alternate_mobile | customers.alt_mobile_e164 | As mobile |
+| email | customers.email | Lower-cased |
+| preferred_language · property_type | customers.preferred_language · property_type | List codes |
+| product_interest · existing_backup · preferred_call_time | cases.<same name> | List codes |
+| avg_monthly_bill_inr · sanctioned_load_kw | cases.<same name> | Numbers |
+| assign_to | case_assignments (user by email) | Active Ecofy User only; else unassigned |
+| (upload itself) | import_batches · import_rows | Consent confirmation, counts, row results |
+
+## Standard systems template v0.2
+| Template column | Stored in | Conversion |
+| for_resi · for_ess · for_ci · expandable · active | calc_systems.<same name> | Y → true, N → false |
+| system_type | calc_systems.system_type | Solar + storage → SOLAR_STORAGE, Storage only → STORAGE_ONLY, Solar only → SOLAR_ONLY |
+| inverter_type | calc_systems.inverter_type | Hybrid → HYBRID, Off-grid → OFF_GRID, On-grid → ON_GRID |
+| phase | calc_systems.phase | Single → SINGLE, Three → THREE |
+| price_updated_on | calc_systems.price_updated_on | DD-MM-YYYY → date |
+| All other 18 columns | calc_systems.<same name> | Stored as is; rules checked by the database |
+
+# 8. Events and jobs
+Events are written to outbox_events in the same transaction as the change, then published to BullMQ by outbox.relay. Handlers are idempotent because delivery is at-least-once.
+| Event | Emitted when | Consumers |
+| case.created · case.reopened | Import commit or single create; reopen | Notifications, funnel rollup |
+| case.temperature_set · case.pushed | S0 decisions | Queue (Hot auto-entry), notify IA |
+| case.assigned · case.returned | Assignment or return | Notify assignee or qualifier |
+| case.stage_changed | Any stage change | Funnel rollup, timeline |
+| activity.logged | Call, remark, comment | first_call_at update, timeline |
+| appointment.scheduled · .completed | Meetings and EPC visits | Reminder job, S2 gate |
+| assessment.saved · .confirmed | S3 | Timeline; S3 → S4 |
+| calc.release_submitted · _approved · _rejected | Designer workflow | Notify EA or IA |
+| eligibility.requested · .decided | S4 eligibility | EA queue; notify caller (status only) |
+| quote.uploaded · quote.expired | S4 quotes | Offer builder; notify caller |
+| offer.composed · otp.sent · otp.verified · otp.failed | S4 to S5 | SMS sender; File creation |
+| file.locked | OTP verified | Notify EA (financing queue) |
+| financing.decided · financier.routed · reacceptance.triggered | S6 | Notify IA and caller (status only); M10 re-acceptance |
+| installation.status_changed | S7 | Timeline; warning if before sanction |
+| downpayment.recorded · disbursement.recorded | S7 | Asset creation; S7 → S8 |
+| asset.activated · emi.updated · asset.event_recorded | S8 | Dashboards |
+| withdrawal.requested · .confirmed | Any stage | Notify IA; alert EA; EPC follow-up task |
+| document.uploaded · document.purged | M15 | Timeline; retention audit |
+| import.committed | M03 | Notify uploader with report |
+| setting.changed · seat.limit_changed · export.generated | Admin actions | Audit only |
+
+# 8.2 Background jobs (ecofy-worker)
+| Job | Trigger | What it does | Retries |
+| outbox.relay | Every 2 seconds | Publishes unpublished outbox rows to BullMQ; marks published_at | Continuous |
+| import.process | Import commit | Validates, dedupes and writes rows in chunks of 500; builds the report | 3, backoff |
+| otp.expire | Every minute | Marks expired OTP challenges | — |
+| quote.expire | Daily 00:30 IST | Marks quotes past valid_until as EXPIRED; notifies caller | 3 |
+| recording.purge | Daily 02:00 IST | Deletes recordings past retention from S3; marks deleted_at; audits | 3, alert on failure |
+| ageing.rollup | Daily 01:00 IST | Fills funnel_daily for dashboards | 3 |
+| appt.reminder | Appointment − 60 min | In-app reminder to the assignee | 3 |
+| import.purge | Daily 02:30 IST | Deletes import files and raw row data past retention; keeps row errors | 3, alert on failure |
+| idempotency.purge | Daily 03:00 IST | Deletes idempotency keys older than 24 hours | 3 |
+| price.stale | Weekly | Flags standard systems older than the refresh setting to IA | 3 |
+| email.send · sms.send | On event | Sends email (SES) or SMS (Gupshup) | 5, backoff; dead-letter |
+
+# 9. Non-functional requirements
+| Area | Requirement |
+| Performance | Lists and case pages p95 under 500 ms; a 5,000-row import finishes within 2 minutes; OTP SMS sent within 5 seconds. |
+| Availability | 99.5% monthly in working hours; planned deploys outside working hours. |
+| Security | TLS everywhere; host-only cookies; tenant_id and RLS on every table (checked in CI by ecofy_schema_tests_v1.4.sql); private S3 with 5-minute URLs; secrets from Secrets Manager; OWASP top-10 checks before go-live. |
+| Privacy (DPDP) | Consent stored per lead plus upload confirmation; recordings deleted after 60 days; import files and raw rows after 30 days; no KYC, PAN, bank or AA data; mobiles masked in lists. |
+| Audit | Every change and export audited in the same transaction; audit_log insert-only; retained for the contract term. |
+| Backups | Daily RDS snapshots; 7-day point-in-time recovery; restore tested before go-live and quarterly. |
+| Scale | Sized for 5 staff users and tens of thousands of cases; no redesign needed up to 50 users. |
+| Browsers | Latest Chrome, Edge and Safari; responsive down to a 13-inch laptop; caller screens usable on a tablet. |
+| Observability | Structured JSON logs with requestId; PM2 log rotation; uptime check on /health every minute; error tracking with alerts to IA. |
+
+# 10. Deployment on ecofy.itarang.com
+## Environments
+| Env | URL | Database | Files | Deploys |
+| Production | ecofy.itarang.com | ecofydb on the shared RDS PostgreSQL 16 instance | S3 prefix ecofy/prod/ | Deploy on tag, with approval |
+| Sandbox | ecofy-sandbox.itarang.com (suggested) | ecofydb_sandbox on the same instance | S3 prefix ecofy/sandbox/ | Deploy on every merge to main |
+
+## Infrastructure
+| Component | Choice | Notes |
+| App runtime | Next.js (App Router) with output: standalone, on the existing app host | PM2 ecofy-lms (web) runs node .next/standalone/server.js; ecofy-worker runs the queue and outbox relay |
+| Reverse proxy + TLS | Nginx vhost for ecofy.itarang.com → 127.0.0.1:<port> | Let's Encrypt auto-renew; HSTS; http → https |
+| DNS | A record ecofy.itarang.com → app host IP | Sandbox record likewise |
+| Database | RDS PostgreSQL 16 (ap-south-1), shared instance | Database ecofydb; role ecofy_app; CONNECT revoked on other databases; migrations via drizzle-kit from schema v1.2 |
+| Queue | Existing Redis with BullMQ | Key prefix ecofy: |
+| Files | S3, private, SSE | Prefix ecofy/; presigned URLs; recordings purged at 60 days |
+| Secrets | AWS Secrets Manager | ecofy/prod and ecofy/sandbox: DB, Supabase, Gupshup, SES |
+| Auth | Supabase Auth, separate project for Ecofy | Email + password; OTP on new device |
+| SMS | Gupshup with DLT templates | Existing acceptance template; new re-acceptance template with amount variables |
+| Email | Amazon SES | Verified sending domain; staff-only emails |
+
+## Pipeline (GitHub Actions)
+| # | Stage | What happens |
+| 1 | Pull request | Typecheck, lint, unit tests (state engine gates, calculator formula) and ecofy_schema_tests_v1.4.sql against a disposable PostgreSQL; the pipeline fails on any failed check. |
+| 2 | Merge to main | Build with output: standalone; copy .next/static and public into the standalone folder. |
+| 3 | Sandbox deploy | Run drizzle-kit migrate on ecofydb_sandbox; upload the release to /srv/ecofy/releases/<sha>; switch the current symlink; pm2 reload ecofy-lms ecofy-worker; smoke tests hit /health and log in with a test user. |
+| 4 | Production release | Tag v*; manual approval; take an RDS snapshot; migrate (expand-only); deploy as in step 3; smoke tests; roll back automatically if /health fails. |
+| 5 | Rollback | Point the symlink at the previous release and reload PM2. Migrations are forward-only (expand, then contract in a later release), so old code runs on the new schema. |
+
+| Known trap on this stack / With output: ‘standalone’, PM2 must run node .next/standalone/server.js with .next/static and public copied in. Running next start under PM2 against a standalone build fails; this has broken deployments before. |
+
+## Go-live checklist
+| Item | Owner |
+| DNS record, TLS certificate and Nginx vhost live | iTarang tech |
+| ecofydb created, ecofy_app role, CONNECT revoked on the CRM and Taru databases | iTarang tech |
+| Secrets in Secrets Manager; nothing in the repo or .env files on the server | iTarang tech |
+| Supabase project, SES domain and Gupshup DLT templates approved (including the new re-acceptance template) | iTarang tech |
+| ecofy_seed_v1.1.sql applied (tenant, orgs, bootstrap iTarang Admin, seats, settings, lists, calendar, financier, calculator release v1 draft) | iTarang tech |
+| Other 4 users invited; DLT template ids and sender id entered in settings | iTarang Admin |
+| EPC partner and financier masters filled | iTarang Admin |
+| Standard systems entered; calculator release v1 tested and approved by Ecofy | iTarang Admin + Ecofy Admin |
+| Consent clause in the Ecofy–iTarang agreement signed | Both founders |
+| Test import with a sample of Ecofy's real lead data | Ecofy Admin |
+| All 25 P0 scenarios in Ecofy_UAT_Scenarios_v1.1 pass; P1 failures have a dated fix plan | Ecofy + iTarang |
+| Backup restore tested; uptime and error alerts wired | iTarang tech |
+
+# 11. Build plan and open items
+| Release | Modules | Estimate | Outcome |
+| R1 Foundation and S0–S3 | M01, M02, M03, M04, M05, M06, M15, M16 (bell), M18; case state engine; outbox and worker | About 3 weeks | Ecofy can upload and qualify; iTarang can work the queue to a meeting |
+| R2 Calculator, offer and File | M07, M08, M09, M10; SMS OTP | About 2 weeks | First Files can be created |
+| R3 Financing to asset, reporting | M11, M12, M13, M14, M17 | About 2 weeks | End-to-end S0 → S8 with dashboards |
+| UAT and go-live | Go-live checklist; data load; training | About 1 week | Production on ecofy.itarang.com |
+
+Estimates assume two full-stack developers already familiar with the iTarang CRM stack; treat them as a planning guide, not a commitment.
+## Open items that touch the build
+| Item | Built as | Who decides |
+| Ecofy's visibility of cases financed by others | Ecofy sees a case only while it is the financier or the lead source (enforced in the database) | Founders, both sides |
+| Consent held per lead | Per-lead consent mandatory + upload confirmation + agreement clause | Legal |
+| Re-acceptance SMS with amounts | New DLT template applied for in R1 so it is ready by R2 | iTarang |
+| Rejection after installation | Warning to IA; cost with Ecofy under W.2 until confirmed | Ecofy |
+| Order of eligibility and quote | Eligibility first; switchable in settings | Ecofy |

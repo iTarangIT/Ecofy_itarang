@@ -1,0 +1,36 @@
+# dependencies / build
+node_modules/
+.next/
+dist/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment & secrets — never commit
+.env
+.env.*
+!.env.example
+
+# local runtime data (dev adapters: storage, mail, sms)
+.data/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# test output
+coverage/
+test-results/
+playwright-report/
+
+# tool state
+.claude/settings.local.json
+.claude/skills/
+.agents/
+skills-lock.json
