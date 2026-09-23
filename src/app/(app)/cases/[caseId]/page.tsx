@@ -2,7 +2,8 @@
 
 import { use, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { get } from "@/lib/api";
+import Link from "next/link";
+import { get, ApiError, errorMessage } from "@/lib/api";
 import { useCase, fmtDateTime, inr } from "@/lib/hooks";
 import { useSession } from "@/components/shell/Shell";
 import { Card, Hours, SegPill, StageChip, StageRail, TempChip, OwnerBadge, STAGE_OWNER, Empty } from "@/components/ui/primitives";
@@ -17,6 +18,33 @@ import { WithdrawalTab } from "@/components/cases/WithdrawalTab";
 type TimelineItem = { at: string; kind: string; title: string; detail?: Record<string, unknown>; actor: { fullName: string; role: string | null } | null };
 const TABS = ["Current step", "Timeline", "Activities", "Appointments", "Assessment", "Offer", "Financing", "Installation", "Documents", "Withdrawal"] as const;
 
+/**
+ * 404 from GET /cases/{id} means "not in your scope" (RLS hides out-of-scope rows, BRD §2.2):
+ * workers see cases assigned to them or qualified by them; Ecofy Admin sees a case only while Ecofy is
+ * its lead source or current financier. Say so, per role, instead of a bare "not found".
+ */
+function HiddenCase({ role, error }: { role: string; error: unknown }) {
+  const status = error instanceof ApiError ? error.status : undefined;
+  if (status !== undefined && status !== 404) {
+    return <div className="banner banner-red">Could not load this case: {errorMessage(error)}</div>;
+  }
+  const why =
+    role === "ITARANG_CALLER" ? "You only see cases assigned to you. This one is not assigned to you yet — the iTarang Admin assigns cases from the Pickup queue."
+    : role === "ECOFY_USER" ? "You only see cases you created or qualified, or that are assigned to you."
+    : role === "ECOFY_ADMIN" ? "Ecofy Admin sees a case only while Ecofy is its lead source or its current financier."
+    : "No case with this id exists in this workspace.";
+  return (
+    <div className="space-y-3">
+      <div className="banner banner-red">This case is not visible to you.</div>
+      <div className="card"><div className="card-b space-y-2 text-[13px]">
+        <p>{why}</p>
+        <p className="text-muted">If you were sent this link, ask the person who shared it to assign the case to you first.</p>
+        <Link className="btn btn-sm" href="/leads">← My leads &amp; cases</Link>
+      </div></div>
+    </div>
+  );
+}
+
 export default function CasePage({ params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = use(params);
   const s = useSession();
@@ -26,7 +54,7 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
   const tl = useQuery({ queryKey: ["timeline", caseId], queryFn: () => get<TimelineItem[]>(`/cases/${caseId}/timeline`), enabled: tab === "Timeline" });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["case", caseId] }); qc.invalidateQueries({ queryKey: ["timeline", caseId] }); };
   if (c.isLoading) return <div className="text-muted">Loading case…</div>;
-  if (c.error || !c.data) return <div className="banner banner-red">Case not found or not visible to you.</div>;
+  if (c.error || !c.data) return <HiddenCase role={s.role} error={c.error} />;
   const k = c.data.data;
   const owner = STAGE_OWNER[k.stage];
 
