@@ -52,15 +52,18 @@ jobs:
 
       # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they are taken from the
       # same env file the server will run with. Nothing else from the file is used here.
+      # The secret may hold the plain file or its single-line base64 encoding.
       - name: Build-time public env
         env:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
         run: |
           if [ -z "$STAGING_ENV_FILE" ]; then
-            echo "::error::Secret STAGING_ENV_FILE is not set (paste the server .env, see deploy/staging.env.example)"
+            echo "::error::Secret STAGING_ENV_FILE is not set (plain or base64 .env, see deploy/staging.env.example)"
             exit 1
           fi
-          printf '%s\n' "$STAGING_ENV_FILE" | grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' >> "$GITHUB_ENV"
+          bash deploy/decode-env.sh "$STAGING_ENV_FILE" > server.env
+          grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' server.env >> "$GITHUB_ENV"
+          rm -f server.env
 
       - name: Build (standalone)
         env:
@@ -112,6 +115,10 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+
       - uses: actions/download-artifact@v4
         with:
           name: release
@@ -132,7 +139,7 @@ jobs:
         env:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
         run: |
-          printf '%s\n' "$STAGING_ENV_FILE" | ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+          bash deploy/decode-env.sh "$STAGING_ENV_FILE" | ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
             'umask 077 && mkdir -p /srv/ecofy/shared && cat > /srv/ecofy/shared/.env.new && mv /srv/ecofy/shared/.env.new /srv/ecofy/shared/.env'
 
       - name: Install release, reload PM2, health check
