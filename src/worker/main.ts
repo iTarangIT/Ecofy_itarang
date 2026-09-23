@@ -1,6 +1,5 @@
 // ecofy-worker (PM2): outbox relay + scheduled jobs. Never connects as the owner role.
-import "dotenv/config";
-process.env.ECOFY_PROCESS = "ecofy-worker";
+import "./env";
 import { Cron } from "croner";
 import { logger } from "@/core/http/logger";
 import { queue } from "@/adapters";

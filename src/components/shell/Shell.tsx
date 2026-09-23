@@ -40,6 +40,8 @@ export function Shell({ session, children }: { session: SessionInfo; children: R
   const router = useRouter();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const initials = session.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
   const bell = useQuery({ queryKey: ["notifications", "unread"], queryFn: () => get<Array<{ id: number; type: string; title: string; body: string | null; caseId: string | null; createdAt: string }>>("/notifications?unread=true&limit=20"), refetchInterval: 30_000 });
   const queueCount = useQuery({ queryKey: ["queue", "count"], queryFn: () => get<Array<{ id: string }>>("/queue?limit=100"), enabled: session.role === "ITARANG_ADMIN", refetchInterval: 60_000 });
   const items = NAV.filter((n) => !n.roles || n.roles.includes(session.role));
@@ -75,17 +77,13 @@ export function Shell({ session, children }: { session: SessionInfo; children: R
               </div>
             ))}
           </nav>
-          <div className="border-t border-white/10 px-4 py-3 text-[11.5px]">
-            <div className="font-semibold text-white">{session.fullName}</div>
-            <div className={clsx("chip mt-1", orgCls)}>{ROLE_LABEL[session.role]}</div>
-            <button className="mt-2 text-[11.5px] text-[#9dc4db] hover:text-white" onClick={logout} type="button">Sign out</button>
-          </div>
+          <div className="border-t border-white/10 px-4 py-3 text-[10.5px] text-[#7fa6bc]">Ecofy Lead Workspace</div>
         </aside>
         <main className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-[58px] items-center gap-3 border-b border-line bg-white px-5">
             <h1 className="text-[16px] font-semibold">{items.find((n) => path === n.href || path.startsWith(n.href + "/"))?.label ?? (path.startsWith("/cases") ? "Case" : "Ecofy Lead Workspace")}</h1>
             <div className="ml-auto relative">
-              <button className="btn btn-sm" type="button" onClick={() => setOpen((o) => !o)}>
+              <button className="btn btn-sm" type="button" aria-label="Notifications" onClick={() => { setOpen((o) => !o); setProfileOpen(false); }}>
                 🔔 {bell.data?.data?.length ? <span className="rounded-full bg-bad px-1.5 text-[10px] font-bold text-white">{bell.data.data.length}</span> : null}
               </button>
               {open && (
@@ -108,6 +106,25 @@ export function Shell({ session, children }: { session: SessionInfo; children: R
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button className="flex items-center gap-2 rounded-lg border border-line px-2 py-1 text-left hover:bg-page" type="button" aria-label="Account" onClick={() => { setProfileOpen((o) => !o); setOpen(false); }}>
+                <span className={clsx("flex h-7 w-7 items-center justify-center rounded-full text-[11.5px] font-bold", orgCls)}>{initials}</span>
+                <span className="hidden sm:block">
+                  <span className="block text-[12.5px] font-semibold leading-tight">{session.fullName}</span>
+                  <span className="block text-[10.5px] leading-tight text-muted">{ROLE_LABEL[session.role]}</span>
+                </span>
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-[260px] card" onMouseLeave={() => setProfileOpen(false)}>
+                  <div className="card-b space-y-2 text-[12.5px]">
+                    <div className="font-semibold">{session.fullName}</div>
+                    <div className="text-muted break-all">{session.email}</div>
+                    <div className={clsx("chip", orgCls)}>{ROLE_LABEL[session.role]}</div>
+                    <button className="btn btn-sm w-full justify-center" onClick={logout} type="button">Sign out</button>
                   </div>
                 </div>
               )}

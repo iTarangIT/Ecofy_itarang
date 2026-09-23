@@ -106,8 +106,12 @@ export async function transition(ctx: ActorContext, input: TransitionInput): Pro
     after: { stage: next.stage, subStatus: next.subStatus, version: next.version },
     reason: input.reason ?? null,
   });
-  await emit(ctx, "case.stage_changed", c.id, { caseNo: c.caseNo, from: c.stage, to: input.to, subStatus: input.subStatus ?? null, ...(input.eventPayload ?? {}) });
-  if (input.eventType && input.eventType !== "case.stage_changed") await emit(ctx, input.eventType, c.id, { caseNo: c.caseNo, ...(input.eventPayload ?? {}) });
+  // When a specific event is also emitted, its `notify` targets ride on that event only — otherwise the
+  // notification handler would create the same bell entry twice (once per outbox row).
+  const secondary = input.eventType && input.eventType !== "case.stage_changed" ? input.eventType : null;
+  const { notify, ...rest } = input.eventPayload ?? {};
+  await emit(ctx, "case.stage_changed", c.id, { caseNo: c.caseNo, from: c.stage, to: input.to, subStatus: input.subStatus ?? null, ...rest, ...(secondary ? {} : notify !== undefined ? { notify } : {}) });
+  if (secondary) await emit(ctx, secondary, c.id, { caseNo: c.caseNo, ...(input.eventPayload ?? {}) });
   return next;
 }
 
