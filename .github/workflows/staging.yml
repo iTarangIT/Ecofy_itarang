@@ -150,7 +150,13 @@ jobs:
             echo "::error::STAGING_SSH_KEY holds a PUBLIC key; paste the private key (/home/deploy/.ssh/github_actions, incl. BEGIN/END lines)"; exit 1;;
           esac
           if ! printf '%s' "$key" | grep -q -- '-----BEGIN'; then
-            key="$(printf '%s' "$key" | tr -d '[:space:]' | base64 -d 2>/dev/null | tr -d '\r' || true)"
+            body="$(printf '%s' "$key" | tr -d '[:space:]')"
+            if [ "$(printf '%s' "$body" | base64 -d 2>/dev/null | head -c 14 | tr -d '\0')" = "openssh-key-v1" ]; then
+              # Only the body of an OpenSSH key was pasted (BEGIN/END lines missing): rebuild the file.
+              key="$(printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----' "$(printf '%s' "$body" | fold -w 70)")"
+            else
+              key="$(printf '%s' "$body" | base64 -d 2>/dev/null | tr -d '\r\0' || true)"
+            fi
           fi
           case "$key" in *"-----BEGIN"*"PRIVATE KEY-----"*) ;;
             *) echo "::error::STAGING_SSH_KEY is not a private key (expected the whole file incl. -----BEGIN/END ... PRIVATE KEY----- lines)"; exit 1;;
