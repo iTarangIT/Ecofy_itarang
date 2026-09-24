@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** `KEY=` (empty) in an env file means "not configured". */
+const blankAsUnset = <T extends z.ZodType>(t: T) => z.preprocess((v) => (v === "" ? undefined : v), t.optional());
+
 /**
  * Typed process configuration. Read once; every module imports `config` instead of process.env.
  * Secrets never leave this module through logs.
@@ -40,6 +43,12 @@ const schema = z.object({
   SMS_WEBHOOK_SECRET: z.string().default("change-me"),
 
   REDIS_URL: z.string().optional(),
+
+  /** iTarang CRM sync (docs/CONFLICTS.md #24). Outbound is on when URL + secret are set; inbound when secret + actor are set. */
+  ITARANG_CRM_URL: blankAsUnset(z.string().url()),
+  ITARANG_CRM_SECRET: blankAsUnset(z.string().min(32, "ITARANG_CRM_SECRET must be at least 32 characters")),
+  /** Email of the ACTIVE iTarang Admin user that inbound CRM events act as (audit actor). */
+  ITARANG_CRM_ACTOR_EMAIL: blankAsUnset(z.string().email()),
 
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   SESSION_COOKIE_NAME: z.string().default("sb-access-token"),

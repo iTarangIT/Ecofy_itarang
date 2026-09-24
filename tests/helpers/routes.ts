@@ -10,6 +10,9 @@ export function registerAllRoutes() {
   registerRoute("/auth/device/resend", () => import("@/app/api/v1/auth/device/resend/route"));
   registerRoute("/auth/logout", () => import("@/app/api/v1/auth/logout/route"));
   registerRoute("/me", () => import("@/app/api/v1/me/route"));
+  registerRoute("/integrations/itarang/status", () => import("@/app/api/v1/integrations/itarang/status/route"));
+  registerRoute("/integrations/itarang/test", () => import("@/app/api/v1/integrations/itarang/test/route"));
+  registerRoute("/integrations/itarang/deliveries/:deliveryId/retry", () => import("@/app/api/v1/integrations/itarang/deliveries/[deliveryId]/retry/route"));
   registerRoute("/users", () => import("@/app/api/v1/users/route"));
   registerRoute("/users/:userId", () => import("@/app/api/v1/users/[userId]/route"));
   registerRoute("/users/:userId/reset-password", () => import("@/app/api/v1/users/[userId]/reset-password/route"));

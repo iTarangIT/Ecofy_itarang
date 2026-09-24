@@ -1763,3 +1763,52 @@ export const vCaseAgeing = pgView("v_case_ageing", {	tenantId: uuid("tenant_id")
 	openFor: interval("open_for"),
 	hotToFirstCall: interval("hot_to_first_call"),
 }).with({"securityInvoker":true}).as(sql`SELECT tenant_id, id AS case_id, case_no, stage, assigned_user_id, owner_org_id, now() - stage_entered_at AS in_stage_for, now() - created_at AS open_for, first_call_at - queue_entered_at AS hot_to_first_call FROM cases c WHERE stage <> 'CLOSED'::case_stage`);
+// ---------------------------------------------------------------------------
+// db/schema/0001_itarang_crm_sync.sql — written by hand to match the DDL (same rules: typing only).
+// ---------------------------------------------------------------------------
+export const integrationLinks = pgTable("integration_links", {
+	tenantId: uuid("tenant_id").notNull(),
+	system: text().notNull(),
+	caseId: uuid("case_id").notNull(),
+	externalId: text("external_id").notNull(),
+	linkedAt: timestamp("linked_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.tenantId, table.system, table.caseId], name: "integration_links_pkey" }),
+	unique("integration_links_tenant_id_system_external_id_key").on(table.tenantId, table.system, table.externalId),
+	pgPolicy("tenant_isolation", { as: "permissive", for: "all", to: ["public"], using: sql`(tenant_id = app_tenant())`, withCheck: sql`(tenant_id = app_tenant())`  }),
+]);
+
+export const integrationDeliveries = pgTable("integration_deliveries", {
+	id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity({ name: "integration_deliveries_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 9223372036854775807, cache: 1 }),
+	tenantId: uuid("tenant_id").notNull(),
+	system: text().notNull(),
+	outboxEventId: bigint("outbox_event_id", { mode: "number" }).notNull(),
+	eventType: text("event_type").notNull(),
+	caseId: uuid("case_id"),
+	body: jsonb().notNull(),
+	status: text().default('PENDING').notNull(),
+	attempts: integer().default(0).notNull(),
+	nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	lastStatus: smallint("last_status"),
+	lastError: text("last_error"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	sentAt: timestamp("sent_at", { withTimezone: true, mode: 'date' }),
+}, (table) => [
+	unique("integration_deliveries_tenant_id_system_outbox_event_id_key").on(table.tenantId, table.system, table.outboxEventId),
+	pgPolicy("tenant_isolation", { as: "permissive", for: "all", to: ["public"], using: sql`(tenant_id = app_tenant())`, withCheck: sql`(tenant_id = app_tenant())`  }),
+]);
+
+export const integrationInbox = pgTable("integration_inbox", {
+	tenantId: uuid("tenant_id").notNull(),
+	system: text().notNull(),
+	eventId: text("event_id").notNull(),
+	eventType: text("event_type").notNull(),
+	caseId: uuid("case_id"),
+	status: text().notNull(),
+	httpStatus: smallint("http_status").notNull(),
+	result: jsonb().notNull(),
+	receivedAt: timestamp("received_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.tenantId, table.system, table.eventId], name: "integration_inbox_pkey" }),
+	pgPolicy("tenant_isolation", { as: "permissive", for: "all", to: ["public"], using: sql`(tenant_id = app_tenant())`, withCheck: sql`(tenant_id = app_tenant())`  }),
+]);

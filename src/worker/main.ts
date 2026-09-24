@@ -4,6 +4,7 @@ import { Cron } from "croner";
 import { logger } from "@/core/http/logger";
 import { queue } from "@/adapters";
 import { relayOnce } from "./relay";
+import { deliverDue, outboundEnabled } from "@/modules/m18-crm-sync/outbound";
 import { activeTenants } from "./tenants";
 import { dispatch, registeredTypes } from "./handlers/registry";
 import { registerAllHandlers } from "./handlers";
@@ -36,6 +37,25 @@ async function main() {
   const relayTimer = setInterval(relay, 2000);
   void relay();
 
+  // iTarang CRM deliveries (docs/ITARANG_CRM_SYNC.md): separate loop so a slow CRM never delays the relay
+  let delivering = false;
+  const deliver = async () => {
+    if (delivering || !outboundEnabled()) return;
+    delivering = true;
+    try {
+      for (const t of await activeTenants()) {
+        const r = await deliverDue(t.tenantId);
+        if (r.sent || r.retried || r.dead) logger.info({ tenant: t.host, ...r }, "crm deliveries");
+      }
+    } catch (err) {
+      logger.error({ err }, "crm delivery tick failed");
+    } finally {
+      delivering = false;
+    }
+  };
+  const deliverTimer = setInterval(deliver, 5000);
+  logger.info({ enabled: outboundEnabled() }, "iTarang CRM outbound sync");
+
   const crons: Cron[] = [];
   for (const job of JOBS) {
     crons.push(
@@ -56,6 +76,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "worker stopping");
     clearInterval(relayTimer);
+    clearInterval(deliverTimer);
     for (const c of crons) c.stop();
     await q.stop();
     process.exit(0);

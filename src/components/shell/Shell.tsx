@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/admin/settings", label: "Settings & masters", icon: "⚒", roles: ["ITARANG_ADMIN", "ECOFY_ADMIN"] },
   { href: "/admin/audit", label: "Audit log", icon: "≡", roles: ["ITARANG_ADMIN", "ECOFY_ADMIN"] },
   { href: "/admin/usage", label: "Usage", icon: "▤", roles: ["ITARANG_ADMIN", "ECOFY_ADMIN"] },
+  { href: "/admin/integration", label: "Integration", icon: "⇄", roles: ["ITARANG_ADMIN", "ECOFY_ADMIN"] },
 ];
 
 export function Shell({ session, children }: { session: SessionInfo; children: ReactNode }) {

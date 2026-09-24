@@ -20,7 +20,8 @@ npm run lint
 npm run test:unit           # calculator engine, working-hours ageing
 npm run test:integration    # API-level UAT flows against the database in .env.local (tenant ITEST, host test.local)
 npm run db:init-env         # .env.local from a bare postgresql:// line in .env
-npm run db:apply-schema     # owner: applies the DDL, sets ecofy_app password (add --force to drop public first)
+npm run db:apply-schema     # owner: applies the DDL, sets ecofy_app password (add --force to drop public first), then db:migrate
+npm run db:migrate          # owner: applies pending additive db/schema/0001+ files (tracked in schema_migrations)
 npm run db:schema-tests     # the 26 handoff checks, rolled back
 npm run db:seed             # ecofy_seed_v1.1 (tenant host = TENANT_HOSTS[0])
 npm run db:fixtures         # dev/staging only: Supabase Auth users per role + EPC/financier/systems, publishes release v1
@@ -29,11 +30,12 @@ npm run build               # next build (standalone) + postbuild copy; worker r
 
 ## Architecture (modular monolith)
 - `src/app/api/v1/**/route.ts` — one folder per OpenAPI path; each is `route({ roles, ifMatch?, idempotent?, body?, query? }, handler)`.
-- `src/core/http/route.ts` — the request pipeline: tenant from Host (`resolve_tenant`), JWT verify, DB session check (one live session), device trust, `x-roles`, one transaction per request with `set_config('app.tenant_id/user_id/role', …, true)` (RLS), If-Match, Idempotency-Key, envelope + error mapping.
+- `src/core/http/route.ts` — the request pipeline: tenant from Host (`resolve_tenant`), JWT verify (or a signed iTarang CRM service call acting as an iTarang user, `core/auth/service.ts`), DB session check (one live session), device trust, `x-roles`, one transaction per request with `set_config('app.tenant_id/user_id/role', …, true)` (RLS), If-Match, Idempotency-Key, envelope + error mapping.
 - `src/core/state-engine/transition.ts` — the only code that changes `cases.stage`; gates → `GATE_NOT_MET{gate}`; stage history + audit + outbox in the same transaction. `touchCase` bumps `version` for If-Match endpoints; side-entity writes pass `bump: false`.
 - `src/modules/mNN-*/service.ts` — one service per BRD module; modules call each other's services, never tables.
 - `src/adapters/*` — storage (local | s3), mailer (dev | ses), sms (dev | gupshup), queue (inline | bullmq). Dev drivers write to `.data/`.
-- `src/worker/main.ts` — outbox relay (2 s) + cron jobs (croner, IST). Handlers are idempotent; jobs read an injectable clock (`worker/clock.ts`).
+- `src/modules/m18-crm-sync/` — iTarang CRM sync (not a BRD module; `docs/ITARANG_CRM_SYNC.md`): outbound deliveries + signed inbound events.
+- `src/worker/main.ts` — outbox relay (2 s) + CRM delivery loop (5 s) + cron jobs (croner, IST). Handlers are idempotent; jobs read an injectable clock (`worker/clock.ts`).
 - `src/core/db/schema.ts` — `drizzle-kit pull` output, **query typing only**; never run `drizzle-kit generate` or `push`.
 
 ## Rules that must not be redesigned (handoff §6)

@@ -4,6 +4,7 @@ import { registerNotificationHandlers } from "./notifications";
 import { registerMessagingHandlers } from "./messaging";
 import { registerImportHandlers } from "./imports";
 import { registerSettingsHandlers } from "./settings";
+import { registerCrmSyncHandlers } from "./crmSync";
 
 let done = false;
 
@@ -15,5 +16,6 @@ export function registerAllHandlers() {
   registerMessagingHandlers();
   registerImportHandlers();
   registerSettingsHandlers();
+  registerCrmSyncHandlers();
   registerJobs(maintenanceJobs);
 }
