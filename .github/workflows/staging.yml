@@ -141,10 +141,28 @@ jobs:
       - name: SSH key
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        # The secret may hold the private key file as-is or its single-line base64 encoding. Windows line
+        # endings (CRLF from copying the key off a terminal) make OpenSSH fail with "error in libcrypto".
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
+          key="$(printf '%s' "$STAGING_SSH_KEY" | tr -d '\r')"
+          case "$key" in ssh-ed25519*|ssh-rsa*|ecdsa-*|*"PUBLIC KEY"*)
+            echo "::error::STAGING_SSH_KEY holds a PUBLIC key; paste the private key (/home/deploy/.ssh/github_actions, incl. BEGIN/END lines)"; exit 1;;
+          esac
+          if ! printf '%s' "$key" | grep -q -- '-----BEGIN'; then
+            key="$(printf '%s' "$key" | tr -d '[:space:]' | base64 -d 2>/dev/null | tr -d '\r' || true)"
+          fi
+          case "$key" in *"-----BEGIN"*"PRIVATE KEY-----"*) ;;
+            *) echo "::error::STAGING_SSH_KEY is not a private key (expected the whole file incl. -----BEGIN/END ... PRIVATE KEY----- lines)"; exit 1;;
+          esac
+          printf '%s\n' "$key" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          if ! ssh-keygen -y -P '' -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub 2>/dev/null; then
+            echo "::error::STAGING_SSH_KEY cannot be loaded (truncated, has a passphrase, or line breaks were lost when pasting)"
+            exit 1
+          fi
+          echo "Using key: $(ssh-keygen -lf ~/.ssh/id_ed25519.pub)"
+          printf 'Host *\n  IdentitiesOnly yes\n  BatchMode yes\n' > ~/.ssh/config
           ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Upload release
