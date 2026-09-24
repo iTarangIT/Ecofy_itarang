@@ -14,7 +14,7 @@ The server's environment file lives in the GitHub secret `STAGING_ENV_FILE`; the
 `/srv/ecofy/shared/.env` (mode 600) on every deploy. `deploy/staging.env.example` is the template.
 
 ## 1. VPS (once)
-1. hPanel → **VPS** → buy/open a KVM plan → OS template **Ubuntu 24.04** → note the public IP and root password.
+1. hPanel → **VPS** → use an existing KVM (the script is safe next to other sites) or buy one with **Ubuntu 24.04**; note the public IP and root password.
 2. SSH in as root and run the bootstrap (installs Node 22, PM2, Nginx, certbot, creates the `deploy` user,
    generates the Actions SSH key, writes the vhost, opens the firewall, requests the TLS certificate):
    ```bash
