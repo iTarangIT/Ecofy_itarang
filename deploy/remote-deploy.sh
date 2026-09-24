@@ -32,9 +32,22 @@ PREV="$(readlink -f "$ROOT/current" 2>/dev/null || true)"
 log "Switching current -> $REL (previous: ${PREV:-none})"
 ln -sfn "$REL" "$ROOT/current"
 
-log "Reloading PM2"
-pm2 startOrReload "$ROOT/current/ecosystem.config.cjs" --update-env
-pm2 save >/dev/null
+# pm2 reload/restart keep an existing process's original cwd and script path (__dirname in
+# ecosystem.config.cjs resolves the `current` symlink to the release it was first started from), so
+# the processes are recreated to make them run the new release.
+restart_apps() {
+  pm2 delete ecofy-lms ecofy-worker >/dev/null 2>&1 || true
+  pm2 start "$ROOT/current/ecosystem.config.cjs"
+  pm2 save >/dev/null
+}
+
+log "Restarting PM2 apps from $REL"
+restart_apps
+running_cwd="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s).find(p=>p.name==="ecofy-lms");process.stdout.write(a?a.pm2_env.pm_cwd:"")})')"
+if [ "$running_cwd" != "$(readlink -f "$REL")" ]; then
+  echo "ecofy-lms runs from '${running_cwd}', expected $REL"
+  exit 1
+fi
 
 log "Health check http://127.0.0.1:$PORT/api/v1/health"
 ok=""
@@ -53,8 +66,7 @@ if [ -z "$ok" ]; then
   if [ -n "$PREV" ] && [ -d "$PREV" ] && [ "$PREV" != "$REL" ]; then
     log "Rolling back to $PREV"
     ln -sfn "$PREV" "$ROOT/current"
-    pm2 startOrReload "$ROOT/current/ecosystem.config.cjs" --update-env
-    pm2 save >/dev/null
+    restart_apps
   fi
   exit 1
 fi

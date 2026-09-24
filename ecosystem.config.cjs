@@ -5,7 +5,7 @@
 // .cjs because package.json has "type": "module" and PM2 requires this file with CommonJS semantics.
 // The release's .env (a symlink to /srv/ecofy/shared/.env on servers) is loaded here and handed to both
 // processes: the standalone server does not read env files from the project root, and PM2 keeps the
-// values across `pm2 startOrReload --update-env`.
+// values across restarts. Deploys recreate both apps (deploy/remote-deploy.sh): a reload keeps the old cwd.
 const fs = require("node:fs");
 const path = require("node:path");
 
