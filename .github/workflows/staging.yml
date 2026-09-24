@@ -63,8 +63,16 @@ jobs:
             echo "::error::Secret STAGING_ENV_FILE is not set (plain or base64 .env, see deploy/staging.env.example)"
             exit 1
           fi
-          bash deploy/decode-env.sh "$STAGING_ENV_FILE" > server.env
-          grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' server.env >> "$GITHUB_ENV"
+          if ! bash deploy/decode-env.sh "$STAGING_ENV_FILE" > server.env; then
+            echo "::error::STAGING_ENV_FILE could not be read as a .env file or its base64 encoding"
+            rm -f server.env
+            exit 1
+          fi
+          if ! grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' server.env >> "$GITHUB_ENV"; then
+            echo "::error::STAGING_ENV_FILE decoded, but has no NEXT_PUBLIC_* lines (re-create the secret from staging.env or its base64)"
+            rm -f server.env
+            exit 1
+          fi
           db_line=$(grep -E '^DATABASE_URL=.' server.env | tail -n 1 || true)
           if [ -z "$db_line" ]; then
             echo "::error::DATABASE_URL is missing from STAGING_ENV_FILE"
