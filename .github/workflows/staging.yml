@@ -51,9 +51,11 @@ jobs:
         run: npm run test:unit
 
       # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they are taken from the
-      # same env file the server will run with. Nothing else from the file is used here.
+      # same env file the server will run with. DATABASE_URL is also needed because `next build` evaluates
+      # route modules (src/core/db/client.ts parses config at import) while collecting page data; it has no
+      # NEXT_PUBLIC_ prefix, so it never reaches the browser bundle. Nothing else from the file is used here.
       # The secret may hold the plain file or its single-line base64 encoding.
-      - name: Build-time public env
+      - name: Build-time env
         env:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
         run: |
@@ -63,6 +65,19 @@ jobs:
           fi
           bash deploy/decode-env.sh "$STAGING_ENV_FILE" > server.env
           grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' server.env >> "$GITHUB_ENV"
+          db_line=$(grep -E '^DATABASE_URL=.' server.env | tail -n 1 || true)
+          if [ -z "$db_line" ]; then
+            echo "::error::DATABASE_URL is missing from STAGING_ENV_FILE"
+            rm -f server.env
+            exit 1
+          fi
+          case "$db_line" in *"<"*">"*)
+            echo "::error::DATABASE_URL in STAGING_ENV_FILE still holds a <placeholder> from staging.env.example"
+            rm -f server.env
+            exit 1;;
+          esac
+          echo "::add-mask::${db_line#DATABASE_URL=}"
+          echo "$db_line" >> "$GITHUB_ENV"
           rm -f server.env
 
       - name: Build (standalone)
