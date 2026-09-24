@@ -6,7 +6,7 @@
 #   Secrets   STAGING_SSH_KEY     private key of the `deploy` user on the VPS (ed25519, no passphrase)
 #             STAGING_SSH_HOST    VPS public IP or hostname
 #             STAGING_ENV_FILE    the complete .env for the server (see deploy/staging.env.example)
-#   Variables STAGING_DOMAIN      ecofy-itarang.com
+#   Variables STAGING_DOMAIN      ecofy.itarang.com
 #             STAGING_SSH_USER    deploy   (optional, default deploy)
 #             STAGING_SSH_PORT    22       (optional, default 22)
 name: staging

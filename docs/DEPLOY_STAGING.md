@@ -1,4 +1,4 @@
-# Deploying `main` to ecofy-itarang.com (staging)
+# Deploying `main` to ecofy.itarang.com (staging)
 
 Pipeline: push to `main` → GitHub Actions (`.github/workflows/staging.yml`) lints, typechecks, runs unit
 tests, builds the standalone app → uploads it over SSH to a Hostinger VPS → `deploy/remote-deploy.sh`
@@ -18,31 +18,28 @@ The server's environment file lives in the GitHub secret `STAGING_ENV_FILE`; the
 2. SSH in as root and run the bootstrap (installs Node 22, PM2, Nginx, certbot, creates the `deploy` user,
    generates the Actions SSH key, writes the vhost, opens the firewall, requests the TLS certificate):
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/iTarangIT/Ecofy_itarang/main/deploy/server-setup.sh | bash -s -- ecofy-itarang.com
+   curl -fsSL https://raw.githubusercontent.com/iTarangIT/Ecofy_itarang/main/deploy/server-setup.sh | bash -s -- ecofy.itarang.com
    ```
    It ends by printing the **private key** for `STAGING_SSH_KEY` and the server IP. Certbot only succeeds
-   after step 2 has propagated; re-run `certbot --nginx -d ecofy-itarang.com --redirect` if it failed.
+   after step 2 has propagated; re-run `certbot --nginx -d ecofy.itarang.com --redirect` if it failed.
 
 ## 2. DNS (hPanel)
-`ecofy-itarang.com` is a separate domain from `itarang.com`, so it must be registered/added in hPanel first
-(**Domains → Add domain**). Then **DNS / Nameservers → Manage DNS records**:
+`ecofy.itarang.com` is a subdomain of `itarang.com`, which is already in hPanel. **Domains → itarang.com → Manage →
+DNS / Nameservers → Manage DNS records**:
 
 | Type | Name | Points to | TTL |
 |---|---|---|---|
-| A | `@` | VPS public IP | 300 |
-| A | `www` | VPS public IP | 300 |
+| A | `ecofy` | VPS public IP | 300 |
 
-If you meant the subdomain `ecofy.itarang.com` instead, add `A  ecofy → VPS IP` on `itarang.com` and use
-`ecofy.itarang.com` everywhere below (`STAGING_DOMAIN`, `TENANT_HOSTS`, `APP_BASE_URL`, the bootstrap argument).
 
 ## 3. Database access
 1. AWS console → RDS → `leadplatform-staging` → security group → add inbound **PostgreSQL 5432 from `<VPS IP>/32`**.
 2. Register the host with the tenant (run from the office machine, which already has the owner URL in `.env.local`):
    ```bash
-   npm run psql -- -c "INSERT INTO tenant_domains (tenant_id, host, is_primary) SELECT id, 'ecofy-itarang.com', false FROM tenants WHERE code = 'ECOFY' ON CONFLICT (host) DO NOTHING;"
+   npm run psql -- -c "INSERT INTO tenant_domains (tenant_id, host, is_primary) SELECT id, 'ecofy.itarang.com', false FROM tenants WHERE code = 'ECOFY' ON CONFLICT (host) DO NOTHING;"
    ```
    Without this row `resolve_tenant()` returns nothing and every page answers "unknown tenant".
-3. Supabase → Authentication → URL configuration → add `https://ecofy-itarang.com` to **Redirect URLs**
+3. Supabase → Authentication → URL configuration → add `https://ecofy.itarang.com` to **Redirect URLs**
    (needed for the password-reset e-mail link).
 
 ## 4. GitHub secrets and variables
@@ -52,8 +49,8 @@ Repository → **Settings → Secrets and variables → Actions**.
 |---|---|---|
 | Secret | `STAGING_SSH_KEY` | private key printed by the bootstrap (`/home/deploy/.ssh/github_actions`, whole file incl. BEGIN/END lines) |
 | Secret | `STAGING_SSH_HOST` | VPS public IP |
-| Secret | `STAGING_ENV_FILE` | the filled copy of `deploy/staging.env.example` (start from your `.env.local`: copy `DATABASE_URL`, the three Supabase keys, `SUPABASE_JWT_SECRET`; set `TENANT_HOSTS=ecofy-itarang.com`, `APP_BASE_URL=https://ecofy-itarang.com`, `COOKIE_SECURE=true`, `NODE_ENV=production`; drop `OWNER_DATABASE_URL`, `PSQL`, `ECOFY_APP_PASSWORD`, `DEV_FIXTURE_PASSWORD`) |
-| Variable | `STAGING_DOMAIN` | `ecofy-itarang.com` |
+| Secret | `STAGING_ENV_FILE` | the filled copy of `deploy/staging.env.example` (start from your `.env.local`: copy `DATABASE_URL`, the three Supabase keys, `SUPABASE_JWT_SECRET`; set `TENANT_HOSTS=ecofy.itarang.com`, `APP_BASE_URL=https://ecofy.itarang.com`, `COOKIE_SECURE=true`, `NODE_ENV=production`; drop `OWNER_DATABASE_URL`, `PSQL`, `ECOFY_APP_PASSWORD`, `DEV_FIXTURE_PASSWORD`) |
+| Variable | `STAGING_DOMAIN` | `ecofy.itarang.com` |
 | Variable | `STAGING_SSH_USER` | `deploy` (optional) |
 | Variable | `STAGING_SSH_PORT` | `22` (optional) |
 
