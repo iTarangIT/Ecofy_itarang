@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { schema } from "@/core/db/client";
 import { withDbContext, setContext } from "@/core/db/tx";
 import { AppError, errors, fromPgError, isAppError } from "@/core/http/errors";
@@ -7,8 +6,8 @@ import type { RequestContext } from "@/core/http/context";
 import { assign, closeCase, requireCase } from "@/modules/m04-qualify/service";
 import { returnToEcofy } from "@/modules/m05-queue/service";
 import { logActivity } from "@/modules/m06-followup/service";
-import { ActivityCreate } from "@/modules/m06-followup/schemas";
-import { SYSTEM } from "./outbound";
+import { SYSTEM } from "./events";
+import type { CrmInboundEventT } from "./schemas";
 
 /**
  * iTarang CRM → Ecofy (docs/CONFLICTS.md #24, contract in docs/ITARANG_CRM_SYNC.md).
@@ -17,22 +16,6 @@ import { SYSTEM } from "./outbound";
  * is carried into the reason / note. Event ids are recorded in `integration_inbox`: a retried event
  * returns the first answer and is never applied twice.
  */
-const base = {
-  eventId: z.string().min(1).max(200),
-  occurredAt: z.string().datetime({ offset: true }),
-  ecofyCaseId: z.string().uuid(),
-  crmLeadId: z.string().min(1).max(200),
-  actorName: z.string().min(1).max(200),
-};
-
-export const CrmInboundEvent = z.discriminatedUnion("type", [
-  z.object({ ...base, type: z.literal("lead.accepted"), data: z.object({}).optional() }),
-  z.object({ ...base, type: z.literal("lead.assigned"), data: z.object({ assigneeName: z.string().min(1).max(200), reason: z.string().max(500).optional() }) }),
-  z.object({ ...base, type: z.literal("lead.activity"), data: ActivityCreate }),
-  z.object({ ...base, type: z.literal("lead.returned"), data: z.object({ reasonCode: z.string().min(1), note: z.string().max(2000).optional() }) }),
-  z.object({ ...base, type: z.literal("lead.closed"), data: z.object({ closureReason: z.string().min(1), note: z.string().max(2000).optional() }) }),
-]);
-export type CrmInboundEventT = z.infer<typeof CrmInboundEvent>;
 
 export type InboundReply = { status: number; body: Record<string, unknown>; duplicate: boolean };
 

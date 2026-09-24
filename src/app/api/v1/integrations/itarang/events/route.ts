@@ -5,7 +5,8 @@ import { errors } from "@/core/http/errors";
 import { toErrorResponse } from "@/core/http/envelope";
 import { requestIdFrom, clientIp } from "@/core/http/requestId";
 import { verify, SIGNATURE_HEADER } from "@/core/auth/hmac";
-import { CrmInboundEvent, receiveEvent } from "@/modules/m18-crm-sync/inbound";
+import { receiveEvent } from "@/modules/m18-crm-sync/inbound";
+import { CrmInboundEvent } from "@/modules/m18-crm-sync/schemas";
 
 /**
  * POST /integrations/itarang/events — events from the iTarang CRM (docs/ITARANG_CRM_SYNC.md).
