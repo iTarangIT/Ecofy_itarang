@@ -22,6 +22,9 @@ The server's environment file lives in the GitHub secret `STAGING_ENV_FILE`; the
    ```
    It ends by printing the **private key** for `STAGING_SSH_KEY` and the server IP. Certbot only succeeds
    after step 2 has propagated; re-run `certbot --nginx -d sandbox-ecofy.itarang.com --redirect` if it failed.
+3. **CloudPanel servers** (the existing iTarang KVM 2 is one): the script skips Nginx and certbot. Create the
+   site in CloudPanel instead: Sites → Add Site → **Create a Reverse Proxy**, domain `sandbox-ecofy.itarang.com`,
+   reverse proxy URL `http://127.0.0.1:3100`; then the site's SSL/TLS tab → Actions → New Let's Encrypt Certificate.
 
 ## 2. DNS (hPanel)
 `sandbox-ecofy.itarang.com` is a subdomain of `itarang.com`, which is already in hPanel. **Domains → itarang.com → Manage →

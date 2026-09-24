@@ -30,9 +30,13 @@ if command -v node >/dev/null 2>&1; then
   say "Keeping existing Node $(node -v)"
 fi
 
+CLP=0
+if command -v clpctl >/dev/null 2>&1 || [ -d /home/clp ]; then CLP=1; say "CloudPanel detected: its Nginx and certificates will be used"; fi
+
 say "Packages"
 apt-get update -y
-apt-get install -y curl git ca-certificates gnupg nginx
+apt-get install -y curl git ca-certificates gnupg
+[ "$CLP" = 1 ] || apt-get install -y nginx
 
 if ! command -v node >/dev/null 2>&1; then
   say "Installing Node 22 (NodeSource)"
@@ -63,6 +67,34 @@ DEPLOYUSER
 say "PM2 on boot for the deploy user (separate from any root PM2)"
 env PATH="$PATH:/usr/bin:/usr/local/bin" pm2 startup systemd -u deploy --hp /home/deploy >/dev/null || true
 sudo -u deploy pm2 install pm2-logrotate >/dev/null 2>&1 || true
+
+if [ "$CLP" = 1 ]; then
+  # CloudPanel owns Nginx and Let's Encrypt on this server: the vhost is created in its UI instead.
+  PUBLIC_IP="$(curl -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
+  cat <<MSG
+
+=========================================================================
+CloudPanel detected. Create the site in CloudPanel (https://$PUBLIC_IP:8443):
+  Sites -> Add Site -> Create a Reverse Proxy
+    Domain Name:       $DOMAIN
+    Reverse Proxy Url: http://127.0.0.1:$PORT
+    Site User:         any name, e.g. ecofy
+  then open the site -> SSL/TLS -> Actions -> New Let's Encrypt Certificate.
+
+Add these in GitHub -> Settings -> Secrets and variables -> Actions
+  Secret   STAGING_SSH_HOST = $PUBLIC_IP
+  Secret   STAGING_SSH_KEY  = the PRIVATE key printed below
+  Variable STAGING_DOMAIN   = $DOMAIN
+  (STAGING_ENV_FILE must contain PORT=$PORT)
+
+-------- /home/deploy/.ssh/github_actions  (paste as STAGING_SSH_KEY) --------
+$(cat /home/deploy/.ssh/github_actions)
+------------------------------------------------------------------------------
+Also allow $PUBLIC_IP in the RDS security group (TCP 5432).
+=========================================================================
+MSG
+  exit 0
+fi
 
 say "Nginx vhost for $DOMAIN -> 127.0.0.1:$PORT"
 TEMPLATE="$(dirname "$0")/nginx.conf.template"
