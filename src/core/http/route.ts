@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 import { config } from "@/core/config";
 import { withDbContext } from "@/core/db/tx";
-import { authenticate } from "@/core/auth/session";
+import { authenticate, type Authenticated } from "@/core/auth/session";
+import { authenticateService, ACTOR_NAME_HEADER } from "@/core/auth/service";
+import { SIGNATURE_HEADER } from "@/core/auth/hmac";
 import { readCookies, sessionCookies } from "@/core/auth/cookies";
 import { resolveTenant, normaliseHost } from "@/core/auth/tenant";
 import { type Role } from "@/core/auth/rbac";
@@ -53,7 +55,8 @@ export function route<B = unknown, Q = unknown>(opts: RouteOptions<B, Q>, handle
     try {
       const params = (await extra?.params) ?? {};
       const query = parseQuery<Q>(opts.query, req);
-      const body = await parseBody<B>(opts.body, req);
+      const rawBody = await readRawBody(req);
+      const body = req.method === "GET" || req.method === "HEAD" ? (undefined as unknown as B) : parseBody<B>(opts.body, rawBody);
       const ifMatch = opts.ifMatch ? parseIfMatch(req) : null;
       const idemKey = opts.idempotent ? parseIdempotencyKey(req) : null;
 
@@ -67,8 +70,13 @@ export function route<B = unknown, Q = unknown>(opts: RouteOptions<B, Q>, handle
       if (!tenantId) throw errors.notFound("Tenant");
 
       const now = new Date();
-      const cookies = readCookies(req);
-      const authd = await authenticate(tenantId, cookies, now);
+      // iTarang CRM service call (signed, acts as an iTarang user) or a browser session (cookies)
+      const service = req.headers.has(SIGNATURE_HEADER);
+      // sign-in, device and logout routes belong to a person's browser session, never to a service
+      if (service && req.nextUrl.pathname.startsWith("/api/v1/auth/")) throw errors.forbidden("Service calls cannot use /auth routes");
+      const authd: Authenticated = service
+        ? { auth: await authenticateService(tenantId, { method: req.method, pathWithQuery: req.nextUrl.pathname + req.nextUrl.search, headers: req.headers }, rawBody, now), deviceTrusted: true }
+        : await authenticate(tenantId, readCookies(req), now);
       if (opts.device !== "session-only" && !authd.deviceTrusted) throw errors.deviceVerification();
       if (!opts.roles.includes(authd.auth.role)) throw errors.forbidden();
 
@@ -76,7 +84,8 @@ export function route<B = unknown, Q = unknown>(opts: RouteOptions<B, Q>, handle
       if (authd.rotated) setCookies.push(...sessionCookies(authd.rotated.accessToken, authd.rotated.refreshToken));
 
       const result = await withDbContext({ tenantId, userId: authd.auth.userId, role: authd.auth.role }, async (tx) => {
-        const ctx: RequestContext = { requestId, ip: clientIp(req.headers), userAgent: req.headers.get("user-agent"), auth: authd.auth, tx, now };
+        const userAgent = service ? `itarang-crm${req.headers.get(ACTOR_NAME_HEADER) ? ` (${req.headers.get(ACTOR_NAME_HEADER)!.slice(0, 120)})` : ""}` : req.headers.get("user-agent");
+        const ctx: RequestContext = { requestId, ip: clientIp(req.headers), userAgent, auth: authd.auth, tx, now };
         const args: RouteArgs<B, Q> = { req, params, body, query, ctx, ifMatch, cookies: setCookies };
         if (idemKey) {
           return withIdempotency(ctx, idemKey, `${req.method} ${req.nextUrl.pathname}`, body, async () => {
@@ -119,15 +128,16 @@ function parseQuery<Q>(schema: ZodType<Q> | undefined, req: NextRequest): Q {
   return r.data;
 }
 
-async function parseBody<B>(schema: ZodType<B> | undefined, req: NextRequest): Promise<B> {
-  if (req.method === "GET" || req.method === "HEAD") return undefined as unknown as B;
+/** The JSON body as sent (also what a service signature covers); "" for GET/HEAD or non-JSON bodies. */
+async function readRawBody(req: NextRequest): Promise<string> {
+  if (req.method === "GET" || req.method === "HEAD") return "";
+  return (req.headers.get("content-type") ?? "").includes("application/json") ? req.text() : "";
+}
+
+function parseBody<B>(schema: ZodType<B> | undefined, text: string): B {
   let raw: unknown = undefined;
-  const ct = req.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) {
-    const text = await req.text();
-    if (text.trim()) {
-      try { raw = JSON.parse(text); } catch { throw errors.validation("Body is not valid JSON"); }
-    }
+  if (text.trim()) {
+    try { raw = JSON.parse(text); } catch { throw errors.validation("Body is not valid JSON"); }
   }
   if (!schema) return raw as B;
   const r = schema.safeParse(raw ?? {});

@@ -1,11 +1,13 @@
 // Applies the authoritative DDL as the owner, then finishes local role setup:
 //   - ALTER ROLE ecofy_app PASSWORD (from .env.local ECOFY_APP_PASSWORD)
 //   - GRANT ecofy_app TO <owner>  (lets the owner run `SET ROLE ecofy_app` in the schema tests)
+//   - the additive db/schema/0001+ files (db/scripts/migrate.mjs)
 // Idempotency: refuses to run when public already has tables unless --force (drops the public schema first).
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT, loadEnv, parsePgUrl } from "./env.mjs";
 import { runPsql } from "./psql.mjs";
+import { applyMigrations } from "./migrate.mjs";
 
 const env = loadEnv();
 const force = process.argv.includes("--force");
@@ -39,3 +41,4 @@ const r2 = runPsql({ url, args: ["-v", `pwd=${pwd}`, "-v", `owner=${owner}`, "-f
 fs.unlinkSync(tmp);
 if (r2.status !== 0) process.exit(r2.status);
 console.log("Schema applied; ecofy_app password set; owner granted membership in ecofy_app.");
+applyMigrations(url);

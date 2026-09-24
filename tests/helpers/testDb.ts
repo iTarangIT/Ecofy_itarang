@@ -89,6 +89,7 @@ export async function ensureTestTenant(): Promise<TestTenant> {
 export async function resetTestData(tenantId: string) {
   const sql = owner();
   const tables = [
+    "integration_inbox", "integration_deliveries", "integration_links",
     "asset_events", "emi_status_updates", "assets", "disbursements", "down_payments", "installation_events", "installations",
     "financing_values", "financing_decisions", "file_acceptances", "files", "otp_challenges", "offers", "quotes", "quote_requests",
     "eligibility_values", "eligibility_checks", "assessments", "withdrawals", "appointments", "activities", "documents",
