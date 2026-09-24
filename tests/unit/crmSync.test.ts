@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sign, verify, apiSigningString } from "@/core/auth/hmac";
-import { crmEventFor } from "@/modules/m18-crm-sync/outbound";
-import { CrmInboundEvent } from "@/modules/m18-crm-sync/inbound";
+import { crmEventFor } from "@/modules/m18-crm-sync/events";
+import { CrmInboundEvent } from "@/modules/m18-crm-sync/schemas";
 
 const SECRET = "unit-secret-unit-secret-unit-secret-0123";
 

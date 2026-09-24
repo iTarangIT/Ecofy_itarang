@@ -6,29 +6,19 @@ import { logger } from "@/core/http/logger";
 import type { OutboxEvent } from "@/core/events/types";
 import { caseOut, loadCase } from "@/modules/m04-qualify/caseView";
 import { sign, SIGNATURE_HEADER, EVENT_ID_HEADER } from "@/core/auth/hmac";
+import { SYSTEM, crmEventFor } from "./events";
 
 /**
  * Ecofy → iTarang CRM (docs/CONFLICTS.md #24, contract in docs/ITARANG_CRM_SYNC.md).
  * The outbox handler only writes an `integration_deliveries` row (no network), so a slow or down CRM
  * never blocks the outbox relay; `deliverDue` sends due rows with back-off, oldest first per case.
  */
-export const SYSTEM = "ITARANG_CRM";
 export const MAX_ATTEMPTS = 12; // ~ 10 s … 1 h back-off, roughly 6 hours in total
 const TIMEOUT_MS = 10_000;
-
-export type CrmEventType = "lead.pushed" | "lead.stage_changed";
 
 export function outboundEnabled() {
   const c = config();
   return Boolean(c.ITARANG_CRM_URL && c.ITARANG_CRM_SECRET);
-}
-
-/** Which Ecofy events the CRM receives. Warm push and Hot both enter the iTarang queue (S0 → S1). */
-export function crmEventFor(e: Pick<OutboxEvent, "eventType" | "payload">): CrmEventType | null {
-  if (e.eventType === "case.pushed") return "lead.pushed";
-  if (e.eventType === "case.temperature_set" && e.payload.temperature === "HOT") return "lead.pushed";
-  if (e.eventType === "case.stage_changed") return e.payload.from === "S0" && e.payload.to === "S1" ? null : "lead.stage_changed";
-  return null;
 }
 
 type CaseView = Awaited<ReturnType<typeof caseOut>>[number];

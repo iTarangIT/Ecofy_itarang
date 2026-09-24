@@ -6,7 +6,8 @@ import { audit } from "@/core/audit/audit";
 import { errors } from "@/core/http/errors";
 import type { RequestContext } from "@/core/http/context";
 import { sign, SIGNATURE_HEADER, EVENT_ID_HEADER } from "@/core/auth/hmac";
-import { SYSTEM, MAX_ATTEMPTS, outboundEnabled } from "./outbound";
+import { MAX_ATTEMPTS, outboundEnabled } from "./outbound";
+import { SYSTEM } from "./events";
 
 /** Admin › Integration: configuration health, recent traffic, a signed test ping and re-queueing. Never returns the secret. */
 export async function status(ctx: RequestContext) {
