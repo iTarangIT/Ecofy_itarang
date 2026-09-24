@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ONE-TIME bootstrap of a fresh Hostinger KVM VPS (Ubuntu 22.04 / 24.04). Run as root:
-#   curl -fsSL https://raw.githubusercontent.com/iTarangIT/Ecofy_itarang/main/deploy/server-setup.sh | bash -s -- ecofy.itarang.com
+#   curl -fsSL https://raw.githubusercontent.com/iTarangIT/Ecofy_itarang/main/deploy/server-setup.sh | bash -s -- sandbox-ecofy.itarang.com
 # Installs Node 22, PM2, Nginx, certbot; creates the `deploy` user and /srv/ecofy; generates the SSH key
 # that GitHub Actions will use and prints the PRIVATE key to paste into the STAGING_SSH_KEY secret.
 set -euo pipefail
