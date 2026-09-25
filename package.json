@@ -22,6 +22,7 @@
     "db:schema-tests": "node db/scripts/run-schema-tests.mjs",
     "db:seed": "node db/scripts/seed.mjs",
     "db:fixtures": "tsx db/scripts/dev-fixtures.ts",
+    "db:integration-user": "node --import tsx db/scripts/ensure-integration-user.ts",
     "db:pull": "drizzle-kit pull",
     "psql": "node db/scripts/psql.mjs"
   },

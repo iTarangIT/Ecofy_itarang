@@ -157,7 +157,7 @@ Headers on every call:
 |---|---|
 | `X-Itarang-Signature` | `t=<unix>,v1=<hex HMAC-SHA256(secret, "<t>." + signing string)>` |
 | `X-Itarang-Act-As` | optional: email of an ACTIVE **iTarang Admin or Caller** in Ecofy. Default `ITARANG_CRM_ACTOR_EMAIL`. Ecofy-org users are refused (403). |
-| `X-Itarang-Actor-Name` | optional: the CRM person. It is stored as the audit row's user agent, `itarang-crm (<name>)`. |
+| `X-Itarang-Actor-Name` | optional label stored as the audit row's user agent, `itarang-crm (<label>)`. The iTarang CRM always sends the fixed `iTarang CRM` — never a person's name — because iTarang decides internally who handles a lead and Ecofy is not told (25 Sep 2026). |
 | `If-Match`, `Idempotency-Key`, `Content-Type: application/json` | exactly as the OpenAPI requires for that endpoint |
 
 The **signing string** binds the signature to one request:
@@ -176,7 +176,7 @@ const res = await fetch(`https://sandbox-ecofy.itarang.com${path}`, {
     "if-match": String(version),
     "x-itarang-signature": sign(secret, `POST\n${path}\n${raw}`),   // sign() from §2
     "x-itarang-act-as": "ia@itarang.com",
-    "x-itarang-actor-name": "Priya Sharma (Sales Head)",
+    "x-itarang-actor-name": "iTarang CRM",
   },
   body: raw || undefined,
 });
@@ -192,16 +192,23 @@ Notes:
 
 ## 6. What the CRM team builds
 
-1. `POST /api/integrations/ecofy/events`: verify the signature, dedupe on `eventId`, upsert `ecofy_leads`
-   (or `leads` with `source = 'ECOFY'`, `external_id = ecofyCaseId`), answer `{ crmLeadId }`.
-2. Sales Head › **Ecofy Leads** nav: list by `temperature` (Hot first) then `queueEnteredAt`; detail page
-   with the customer, the stage and an "Open in Ecofy" link (`ecofyUrl`).
-3. Either post the simple §4 events, or call the full API in §5 for anything the iTarang Admin does (screens for
-   assessment, offers, OTP, financing, etc. can be built on the same endpoints the Ecofy UI uses).
+Status 25 Sep 2026 — all three are built in the iTarang CRM (E-305 receiver; E-307/E-308 workspace):
+
+1. ✅ `POST /api/integrations/ecofy/events`: verify the signature, dedupe on `eventId`, upsert `ecofy_leads`,
+   answer `{ crmLeadId }`.
+2. ✅ Sales Head › **ECOFY** nav (Dashboard, Pickup Queue, All Leads, Eligibility Queue, Financing Queue, Assets);
+   ASM / ISR › **Ecofy Leads** (own leads only). The Sales Head assigns the lead to an ASM / ISR inside the CRM;
+   Ecofy only receives `lead.assigned` with `assigneeName: "iTarang team"` (S1 → S2).
+3. ✅ Everything else goes through the full §5 API: calls, meetings, advance, assessment, eligibility request, EPC quote
+   upload, offer, OTP send/verify, installation, documents, withdrawals, financier routing and other-financier decisions.
+   Calls and meeting bookings are kept in the CRM and replayed when Ecofy is unreachable; stage moves need Ecofy.
 
 ## 7. Operations (Ecofy)
 
 - Apply the tables once per database: `npm run db:migrate` (`db/schema/0001_itarang_crm_sync.sql`).
-- Create the integration user in Ecofy (Admin › Users, role iTarang Admin), then set the three env vars and restart web + worker.
+- Create the integration user: `npm run db:integration-user -- --email <ITARANG_CRM_ACTOR_EMAIL> --name "<name>" --apply`
+  (idempotent; creates or activates an ACTIVE iTarang Admin that never logs in, raising the seat cap if needed).
+  A user invited through Admin › Users stays INVITED until that person logs in once, which signed calls refuse.
+  Then set the three env vars and restart web + worker.
 - Look at stuck deliveries: `select id, event_type, status, attempts, last_status, last_error from integration_deliveries where status <> 'SENT' order by id;`
 - Re-send a parked one: `update integration_deliveries set status = 'PENDING', attempts = 0, next_attempt_at = now() where id = …;`
