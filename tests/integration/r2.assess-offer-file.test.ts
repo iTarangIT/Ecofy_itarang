@@ -188,6 +188,8 @@ describe("R2 — assessment, calculator designer, offer, OTP and File", () => {
     // resend inside 60 s is blocked
     const early = await ic.post(`/offers/${o.offerId}/otp`, undefined, { ifMatch: cur.version, idempotencyKey: idem() });
     expect(early.status).toBe(429);
+    // Ecofy Admin never verifies the initial acceptance (CONFLICTS #28 opens re-acceptance only)
+    expect((await ea.post(`/otp/${a.body.data.challengeId}/verify`, { code: "000000" })).status).toBe(403);
     // 5 wrong codes → locked
     for (let i = 1; i <= 4; i++) {
       const r = await ic.post(`/otp/${a.body.data.challengeId}/verify`, { code: "000000" });
