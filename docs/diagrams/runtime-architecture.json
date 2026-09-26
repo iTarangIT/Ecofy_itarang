@@ -1,0 +1,413 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Ecofy Lead Workspace Runtime",
+    "output": "docs/diagrams/runtime-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/iTarangIT/Ecofy_itarang",
+      "provider": "github",
+      "revision": "af36d53262a12b865ce04cbe621115067b051fff"
+    },
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Primary request path",
+        "focus": [
+          "staff",
+          "nginx",
+          "web",
+          "pipeline",
+          "modules",
+          "postgres"
+        ],
+        "note": "A browser call becomes one RLS-scoped transaction."
+      },
+      {
+        "id": "async-sync",
+        "label": "Worker and CRM sync",
+        "focus": [
+          "postgres",
+          "worker",
+          "crm",
+          "providers"
+        ],
+        "note": "Outbox rows drive jobs, messages and signed CRM deliveries."
+      },
+      {
+        "id": "trust",
+        "label": "Trust boundaries",
+        "focus": [
+          "staff",
+          "crm",
+          "nginx",
+          "pipeline",
+          "supabase",
+          "postgres"
+        ],
+        "note": "Cookies for people, HMAC for the CRM, RLS at the database."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "staff",
+      "type": "external",
+      "label": "Ecofy / iTarang staff",
+      "sublabel": "browser, cookies",
+      "pos": [
+        30,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ]
+    },
+    {
+      "id": "crm",
+      "type": "external",
+      "label": "iTarang CRM",
+      "sublabel": "sandbox.itarang.com",
+      "pos": [
+        30,
+        420
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "sources": [
+        {
+          "path": "docs/ITARANG_CRM_SYNC.md",
+          "label": "sync contract"
+        }
+      ]
+    },
+    {
+      "id": "nginx",
+      "type": "security",
+      "label": "Nginx + TLS",
+      "sublabel": "certbot, :443 only",
+      "pos": [
+        230,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "VPS",
+      "sources": [
+        {
+          "path": "deploy/nginx.conf.template",
+          "label": "vhost"
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Next.js app",
+      "sublabel": "UI + /api/v1 routes",
+      "pos": [
+        430,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "ecofy-lms",
+      "sources": [
+        {
+          "path": "ecosystem.config.cjs",
+          "line": 29,
+          "label": "PM2 app"
+        }
+      ]
+    },
+    {
+      "id": "pipeline",
+      "type": "security",
+      "label": "Request pipeline",
+      "sublabel": "tenant · auth · RBAC",
+      "pos": [
+        630,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "route()",
+      "sources": [
+        {
+          "path": "src/core/http/route.ts",
+          "line": 49,
+          "label": "route()"
+        },
+        {
+          "path": "src/core/auth/session.ts",
+          "label": "session"
+        }
+      ]
+    },
+    {
+      "id": "modules",
+      "type": "backend",
+      "label": "Module services",
+      "sublabel": "m01–m17 + state engine",
+      "pos": [
+        830,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "one tx",
+      "sources": [
+        {
+          "path": "src/core/state-engine/transition.ts",
+          "label": "transition"
+        },
+        {
+          "path": "src/core/events/outbox.ts",
+          "label": "outbox emit"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "RLS, outbox, audit",
+      "pos": [
+        1080,
+        190
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "ecofy_app",
+      "sources": [
+        {
+          "path": "src/core/db/tx.ts",
+          "line": 16,
+          "label": "set_config"
+        },
+        {
+          "path": "db/schema/0000_ecofy_schema_v1.4.sql",
+          "label": "DDL"
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Worker",
+      "sublabel": "relay · deliveries · cron",
+      "pos": [
+        830,
+        420
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "ecofy-worker",
+      "sources": [
+        {
+          "path": "src/worker/main.ts",
+          "label": "loops"
+        },
+        {
+          "path": "src/worker/relay.ts",
+          "label": "relayOnce"
+        },
+        {
+          "path": "src/modules/m18-crm-sync/outbound.ts",
+          "label": "deliverDue"
+        }
+      ]
+    },
+    {
+      "id": "providers",
+      "type": "cloud",
+      "label": "Provider adapters",
+      "sublabel": "S3 · SES · Gupshup · Redis",
+      "pos": [
+        1080,
+        420
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "by env",
+      "sources": [
+        {
+          "path": "src/adapters/index.ts",
+          "label": "driver select"
+        }
+      ]
+    },
+    {
+      "id": "supabase",
+      "type": "external",
+      "label": "Supabase Auth",
+      "sublabel": "JWT, refresh, admin",
+      "pos": [
+        630,
+        40
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "sources": [
+        {
+          "path": "src/core/auth/supabase.ts",
+          "label": "clients"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Public internet",
+      "wraps": [
+        "staff",
+        "crm"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "Hostinger VPS · sandbox-ecofy.itarang.com",
+      "wraps": [
+        "nginx",
+        "web",
+        "pipeline",
+        "modules",
+        "worker"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "security-group",
+      "label": "PM2 ecofy-lms · 127.0.0.1:3100",
+      "wraps": [
+        "web",
+        "pipeline",
+        "modules"
+      ],
+      "pad": 12
+    },
+    {
+      "kind": "region",
+      "label": "AWS ap-south-1",
+      "wraps": [
+        "postgres",
+        "providers"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "from": "staff",
+      "to": "nginx",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "from": "nginx",
+      "to": "web",
+      "label": "proxy :3100",
+      "variant": "emphasis"
+    },
+    {
+      "from": "web",
+      "to": "pipeline",
+      "label": "/api/v1",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pipeline",
+      "to": "modules",
+      "label": "ctx + tx",
+      "variant": "emphasis"
+    },
+    {
+      "from": "modules",
+      "to": "postgres",
+      "label": "SQL under RLS",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pipeline",
+      "to": "supabase",
+      "label": "verify · refresh",
+      "variant": "dashed"
+    },
+    {
+      "from": "worker",
+      "to": "postgres",
+      "label": "poll outbox · jobs",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "worker",
+      "to": "providers",
+      "label": "mail · SMS · queue",
+      "variant": "dashed"
+    },
+    {
+      "from": "worker",
+      "to": "crm",
+      "label": "HMAC-signed events",
+      "variant": "security"
+    },
+    {
+      "from": "crm",
+      "to": "nginx",
+      "label": "signed inbound",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Primary path",
+      "items": [
+        "Browser → Nginx TLS → Next.js standalone (PM2, 127.0.0.1:3100) → route() on every /api/v1 call",
+        "route(): tenant from Host, cookie JWT, one live session, device trust, x-roles, If-Match, Idempotency-Key",
+        "Handler runs in one transaction with set_config(app.tenant_id/user_id/role); stage changes only via transition(), which commits audit + outbox rows with the change"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries",
+      "items": [
+        "People use cookies (Supabase JWT); the CRM signs raw bodies with HMAC-SHA256 (300 s skew) and may never call /auth routes",
+        "Nginx is the only public listener; the server holds only the ecofy_app role and RLS enforces tenant and role per transaction",
+        "Money lives only in *_values tables readable by the role on the row; Ecofy and the CRM never read each other database (CONFLICTS #24)"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Worker and external services",
+      "items": [
+        "Outbox relay every 2 s (SKIP LOCKED, in order, at-least-once); CRM deliveries every 5 s with back-off, 12 attempts then DEAD",
+        "Croner jobs in IST under a system context (ITARANG_ADMIN, actor NULL); inbound CRM events run the normal module services as the integration user",
+        "Adapters by env: storage local|s3, mail dev|ses, sms dev|gupshup, queue inline|bullmq (Redis); staging runs the dev drivers, which write to .data/"
+      ]
+    }
+  ]
+}
