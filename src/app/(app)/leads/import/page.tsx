@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { get, post, errorMessage } from "@/lib/api";
 import { Banner, Card, Field } from "@/components/ui/primitives";
+import { FilePicker } from "@/components/ui/file-picker";
 import { toast } from "@/components/ui/toast";
 import { useSettings } from "@/lib/hooks";
 
@@ -75,7 +76,8 @@ export default function ImportPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="1 · Upload file">
           <div className="space-y-3">
-            <input type="file" accept=".xlsx,.csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-[13px]" />
+            <div className="text-[12.5px] text-muted">Select the filled-in lead upload template (Excel .xlsx or .csv, up to 5,000 rows), then click Upload.</div>
+            <FilePicker file={file} onChange={setFile} hint="Excel .xlsx or .csv, up to 5,000 rows" />
             <button className="btn btn-primary" type="button" disabled={!file || busy} onClick={upload}>Upload</button>
             {view && <div className="text-[12px] text-muted">Import <span className="mono">{view.id}</span> · {view.fileName} · status <b>{view.status}</b>{view.rowCount ? ` · ${view.rowCount} rows` : ""}</div>}
           </div>
