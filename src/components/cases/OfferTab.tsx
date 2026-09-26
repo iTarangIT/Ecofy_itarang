@@ -23,9 +23,11 @@ export function OfferTab({ c, onChange }: { c: CaseSummary; onChange: () => void
   const quotes = useQuery({ queryKey: ["quotes", c.id], queryFn: () => get<Quote[]>(`/cases/${c.id}/quotes`) });
   const offers = useQuery({ queryKey: ["offers", c.id], queryFn: () => get<Offer[]>(`/cases/${c.id}/offers`) });
   const file = useQuery({ queryKey: ["file", c.id], queryFn: () => get<FileRec | null>(`/cases/${c.id}/file`) });
+  const reacceptancePending = c.stage === "S6" && c.subStatus === "REACCEPTANCE_PENDING";
+  const reacceptance = useQuery({ queryKey: ["reacceptance", c.id], queryFn: () => get<Otp | null>(`/cases/${c.id}/reacceptance`), enabled: itarang && reacceptancePending });
   const epcs = useEpcPartners();
   const financiers = useFinanciers(itarang);
-  const refresh = () => { ["quotes", "offers", "file", "assessments"].forEach((k) => qc.invalidateQueries({ queryKey: [k, c.id] })); onChange(); };
+  const refresh = () => { ["quotes", "offers", "file", "assessments", "reacceptance"].forEach((k) => qc.invalidateQueries({ queryKey: [k, c.id] })); onChange(); };
   const [busy, setBusy] = useState(false);
   const [pdf, setPdf] = useState<File | null>(null);
   const [qf, setQf] = useState({ epcPartnerId: "", assessmentId: "", systemDesc: "", batteryKwh: "", inverterKva: "", solarKwp: "", equipmentInr: "", installationInr: "", gstInr: "", validUntil: "", notes: "", provisional: false, provisionalReason: "" });
@@ -112,6 +114,20 @@ export function OfferTab({ c, onChange }: { c: CaseSummary; onChange: () => void
                 <button className="btn btn-primary" type="button" disabled={busy} onClick={() => run(c.stage === "S4" ? "OTP sent — case at S5" : "OTP re-sent", async () => { const r = await post<Otp>(`/offers/${liveOffer.id}/otp`, undefined, { ifMatch: c.version, idempotent: true }); setOtp(r.data); })}>{c.stage === "S4" ? "Send offer — SMS OTP to customer" : "Resend OTP"}</button>
                 {otp && <span className="text-muted">Sent to {otp.maskedMobile}, expires {fmtDateTime(otp.expiresAt)} · {otp.attemptsRemaining} attempts</span>}
                 {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
+              </div>
+            )}
+            {itarang && reacceptancePending && (
+              <div className="flex flex-wrap items-end gap-2 rounded-lg border border-[#f0dcaf] bg-warn-soft p-3">
+                <div className="w-full text-[12.5px]"><b>Re-acceptance OTP.</b> The sanction is below the accepted total. Ecofy Admin sends the customer an OTP carrying the revised amounts; enter the code the customer reads out to confirm the revised terms (S6 → S7).</div>
+                {reacceptance.data?.data ? (
+                  <>
+                    <span className="text-[12px] text-muted">Sent to {reacceptance.data.data.maskedMobile}, expires {fmtDateTime(reacceptance.data.data.expiresAt)} · {reacceptance.data.data.attemptsRemaining} attempts</span>
+                    <Field label="Customer's OTP" hint="6 digits · 5 attempts · 10 minutes"><input className="input mono w-40 text-center tracking-[0.3em]" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} /></Field>
+                    <button className="btn btn-green" type="button" disabled={busy || code.length !== 6} onClick={() => run("Re-accepted — revised terms confirmed, case at S7", async () => { await post(`/otp/${reacceptance.data!.data!.challengeId}/verify`, { code }); setCode(""); })}>Verify re-acceptance</button>
+                  </>
+                ) : (
+                  <span className="text-[12px] text-muted">{reacceptance.isLoading ? "Checking for a live OTP…" : "No live re-acceptance OTP yet — Ecofy Admin triggers it from the Financing tab."}</span>
+                )}
               </div>
             )}
             {itarang && c.stage === "S5" && (

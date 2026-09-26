@@ -184,6 +184,19 @@ export async function fileOfCase(ctx: RequestContext, caseId: string) {
   return f ? fileOut(ctx.tx, f) : null;
 }
 
+/**
+ * FR-11.3: the live (SENT) re-acceptance challenge of a case, or null. Lets the iTarang caller's Offer tab find the
+ * challenge that Ecofy Admin triggered from the Financing tab, so the customer's code can be verified at S6.
+ * Never carries the code: the plaintext exists only in the trigger response (devCode, sandbox) and the SMS.
+ */
+export async function liveReacceptanceChallenge(ctx: RequestContext, caseId: string) {
+  const c = await requireCase(ctx, caseId);
+  const ch = (await ctx.tx.select().from(schema.otpChallenges).where(and(eq(schema.otpChallenges.caseId, c.id), eq(schema.otpChallenges.purpose, "REACCEPTANCE"), eq(schema.otpChallenges.status, "SENT"))).orderBy(desc(schema.otpChallenges.sentAt)).limit(1))[0];
+  if (!ch) return null;
+  const s = await otpSettings(c.tenantId, ctx.tx);
+  return otpOut(ch, s.maxAttempts, s.resendAfter);
+}
+
 export async function otpStatus(ctx: RequestContext, challengeId: string) {
   const ch = (await ctx.tx.select().from(schema.otpChallenges).where(and(eq(schema.otpChallenges.tenantId, ctx.auth.tenantId), eq(schema.otpChallenges.id, challengeId))).limit(1))[0];
   if (!ch) throw errors.notFound("OTP challenge");
