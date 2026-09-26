@@ -120,12 +120,12 @@ export async function triggerReacceptance(ctx: RequestContext, caseId: string, d
   if (!offer) throw errors.internal("accepted offer missing");
   const dlt = (await getSetting(c.tenantId, "sms.dlt_template_reacceptance", ctx.tx)) ?? "DLT-REACCEPTANCE-DEV";
   const dp = v.downPaymentInr ?? 0;
-  const { row, settings } = await issueOtp(ctx, c, offer, "REACCEPTANCE", idempotencyKey, (code, min) => `Your financed amount is Rs ${v.sanctionedInr!.toLocaleString("en-IN")} and down payment Rs ${dp.toLocaleString("en-IN")}. OTP to accept the revised terms: ${code} (valid ${min} min). - Ecofy`, String(dlt));
+  const { row, settings, code } = await issueOtp(ctx, c, offer, "REACCEPTANCE", idempotencyKey, (code, min) => `Your financed amount is Rs ${v.sanctionedInr!.toLocaleString("en-IN")} and down payment Rs ${dp.toLocaleString("en-IN")}. OTP to accept the revised terms: ${code} (valid ${min} min). - Ecofy`, String(dlt));
   await audit(ctx, { action: "reacceptance.trigger", entityType: "financing_decision", entityId: d.id, caseId: c.id });
   await emit(ctx, "reacceptance.triggered", d.id, { caseId: c.id, notify: c.assignedUserId ? [{ userId: c.assignedUserId, type: "reacceptance.triggered", title: `${c.caseNo}: re-acceptance OTP sent to the customer`, caseId: c.id }] : [] });
   await touchCase(ctx, c.id, null, {}, { action: "reacceptance.triggered", after: { challengeId: row.id }, bump: false });
   const { otpOut } = await import("@/modules/m10-acceptance/service");
-  return otpOut(row, settings.maxAttempts, settings.resendAfter);
+  return otpOut(row, settings.maxAttempts, settings.resendAfter, code);
 }
 
 /**

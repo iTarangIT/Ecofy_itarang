@@ -8,6 +8,7 @@ process.env.AUTH_JWT_STUB_SECRET ??= "test-stub-secret-test-stub-secret";
 process.env.STORAGE_DRIVER = "local";
 process.env.MAIL_DRIVER = "dev";
 process.env.SMS_DRIVER = "dev";
+process.env.OTP_DEV_ECHO = "true";
 process.env.QUEUE_DRIVER = "inline";
 process.env.LOCAL_STORAGE_DIR = ".data/test-storage";
 process.env.DEV_MAIL_DIR = ".data/test-mail";

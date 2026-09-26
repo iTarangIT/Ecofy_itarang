@@ -7,6 +7,7 @@ import { audit } from "@/core/audit/audit";
 import { emit } from "@/core/events/outbox";
 import { getSetting } from "@/core/settings/settingsCache";
 import { istDate } from "@/core/calendar/dates";
+import { config } from "@/core/config";
 import { transition, lockCase, touchCase, type CaseRow } from "@/core/state-engine/transition";
 import type { RequestContext } from "@/core/http/context";
 import type { Role } from "@/core/auth/rbac";
@@ -19,8 +20,15 @@ export const maskMobile = (m: string) => m.replace(/^(\+91)\d{6}(\d{4})$/, "$1**
 
 export type OtpRow = typeof schema.otpChallenges.$inferSelect;
 
-export function otpOut(o: OtpRow, maxAttempts: number, resendAfterSeconds: number) {
-  return { challengeId: o.id, offerId: o.offerId, purpose: o.purpose, status: o.status, expiresAt: o.expiresAt, resendAfterSeconds, maskedMobile: maskMobile(o.mobileE164), attemptsRemaining: Math.max(0, maxAttempts - o.attempts), sentAt: o.sentAt };
+/**
+ * `devCode` is the plaintext OTP and is present ONLY when OTP_DEV_ECHO=true (sandbox/test): it lets testers read the
+ * code on screen when SMS_DRIVER=dev writes the message to disk instead of a phone. Production never sets the flag.
+ */
+export function otpOut(o: OtpRow, maxAttempts: number, resendAfterSeconds: number, devCode?: string) {
+  return {
+    challengeId: o.id, offerId: o.offerId, purpose: o.purpose, status: o.status, expiresAt: o.expiresAt, resendAfterSeconds, maskedMobile: maskMobile(o.mobileE164), attemptsRemaining: Math.max(0, maxAttempts - o.attempts), sentAt: o.sentAt,
+    ...(devCode && config().otpDevEcho ? { devCode } : {}),
+  };
 }
 
 async function otpSettings(tenantId: string, tx: Tx) {
@@ -58,7 +66,7 @@ export async function issueOtp(ctx: RequestContext, c: CaseRow, offer: typeof sc
   await emit(ctx, "job.sms.send", c.id, { smsMessageId: Number(sms.id), to: customer.mobile, text: smsText(code, s.expiryMinutes), dltTemplateId, purpose: purpose === "ACCEPTANCE" ? "ACCEPTANCE_OTP" : "REACCEPTANCE_OTP", senderId: await getSetting(c.tenantId, "sms.sender_id", ctx.tx) });
   await emit(ctx, "otp.sent", row.id, { caseId: c.id, offerId: offer.id, purpose });
   await audit(ctx, { action: "otp.send", entityType: "otp_challenge", entityId: row.id, caseId: c.id, after: { purpose, offerId: offer.id, expiresAt } });
-  return { row, settings: s };
+  return { row, settings: s, code };
 }
 
 /** FR-10.1: sending the offer sends the acceptance OTP and moves the case to S5. */
@@ -75,11 +83,11 @@ export async function sendOfferOtp(ctx: RequestContext, offerId: string, ifMatch
   if (q.provisional && !(await getSetting(c.tenantId, "gates.allow_provisional_quote_acceptance", ctx.tx))) throw errors.gate("provisional_quote", "Provisional quotes cannot be accepted (setting)");
   const dlt = (await getSetting(c.tenantId, "sms.dlt_template_acceptance", ctx.tx)) ?? "DLT-ACCEPTANCE-DEV";
   const content = offer.content as { totalInr: number; system: string };
-  const { row, settings } = await issueOtp(ctx, c, offer, "ACCEPTANCE", idempotencyKey, (code, min) => `Your OTP to accept the offer (${content.system}, Rs ${content.totalInr.toLocaleString("en-IN")}) is ${code}. Valid ${min} min. Financing through Ecofy, subject to sanction. - iTarang`, String(dlt));
+  const { row, settings, code } = await issueOtp(ctx, c, offer, "ACCEPTANCE", idempotencyKey, (code, min) => `Your OTP to accept the offer (${content.system}, Rs ${content.totalInr.toLocaleString("en-IN")}) is ${code}. Valid ${min} min. Financing through Ecofy, subject to sanction. - iTarang`, String(dlt));
   if (offer.status === "DRAFT") await ctx.tx.update(schema.offers).set({ status: "SENT", sentAt: ctx.now }).where(eq(schema.offers.id, offer.id));
   if (c.stage === "S4") await transition(ctx, { caseId: c.id, expectedVersion: c.version, to: "S5", subStatus: "OTP_SENT", reason: `Offer v${offer.version} sent`, auditAction: "offer.send" });
   else await touchCase(ctx, c.id, c.version, {}, { action: "otp.resend", after: { offerId: offer.id } });
-  return otpOut(row, settings.maxAttempts, settings.resendAfter);
+  return otpOut(row, settings.maxAttempts, settings.resendAfter, code);
 }
 
 export type FileRow = typeof schema.files.$inferSelect;

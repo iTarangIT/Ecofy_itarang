@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { ensureTestTenant, resetTestData, closeOwner, owner, type TestTenant } from "../helpers/testDb";
 import { ApiClient, expectOk, idem } from "../helpers/api";
@@ -176,8 +177,11 @@ describe("R2 — assessment, calculator designer, offer, OTP and File", () => {
     expect(a.status).toBe(201);
     expect(b.status).toBe(201);
     expect(b.body.data.challengeId).toBe(a.body.data.challengeId);
-    const sent = await owner()`select count(*)::int as n from otp_challenges where offer_id = ${o.offerId}`;
+    const sent = await owner()`select count(*)::int as n, min(code_hash) as code_hash from otp_challenges where offer_id = ${o.offerId}`;
     expect(sent[0].n).toBe(1);
+    // OTP_DEV_ECHO=true (test/sandbox only): the plaintext code rides along as devCode and matches the stored hash.
+    expect(a.body.data.devCode).toMatch(/^\d{6}$/);
+    expect(createHash("sha256").update(a.body.data.devCode).digest("hex")).toBe(sent[0].code_hash);
     const cur = expectOk<{ stage: string; subStatus: string; version: number }>(await ic.get(`/cases/${o.id}`));
     expect(cur.stage).toBe("S5");
     expect(cur.subStatus).toBe("OTP_SENT");
