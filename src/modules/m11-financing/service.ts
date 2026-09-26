@@ -1,4 +1,4 @@
-import { and, eq, desc, inArray, sql } from "drizzle-orm";
+import { and, eq, desc, exists, inArray, or, sql } from "drizzle-orm";
 import { schema, type Tx } from "@/core/db/client";
 import { errors } from "@/core/http/errors";
 import { audit } from "@/core/audit/audit";
@@ -41,13 +41,22 @@ export async function listDecisions(ctx: RequestContext, caseId: string) {
   return Promise.all(rows.map((d) => decisionOut(ctx.tx, d, ctx.auth.role)));
 }
 
-/** FR-11.1: Files awaiting a decision for the financiers whose values this role may see. */
+/**
+ * FR-11.1: Files awaiting a decision for the financiers whose values this role may see.
+ * CONFLICTS #27: also the financier's SANCTIONED Files whose case is still REACCEPTANCE_PENDING at S6, so the
+ * queue keeps showing a File until financing is actually settled (`waitingOn` tells the two apart).
+ */
 export async function financingQueue(ctx: RequestContext, q: { cursor?: string; limit?: number }) {
   const limit = q.limit ?? 50;
   const fins = await ctx.tx.select({ id: schema.financiers.id }).from(schema.financiers).where(and(eq(schema.financiers.tenantId, ctx.auth.tenantId), eq(schema.financiers.valuesVisibleTo, ctx.auth.role)));
   if (!fins.length) return { data: [], meta: { nextCursor: null, limit } };
   const cur = decodeCursor<{ at: string; id: string }>(q.cursor);
-  const conds = [eq(schema.financingDecisions.tenantId, ctx.auth.tenantId), inArray(schema.financingDecisions.financierId, fins.map((f) => f.id)), eq(schema.financingDecisions.status, "SUBMITTED")];
+  const reacceptancePending = exists(ctx.tx.select({ one: sql`1` }).from(schema.cases).where(and(eq(schema.cases.id, schema.financingDecisions.caseId), eq(schema.cases.stage, "S6"), eq(schema.cases.subStatus, "REACCEPTANCE_PENDING"))));
+  const conds = [
+    eq(schema.financingDecisions.tenantId, ctx.auth.tenantId),
+    inArray(schema.financingDecisions.financierId, fins.map((f) => f.id)),
+    or(eq(schema.financingDecisions.status, "SUBMITTED"), and(eq(schema.financingDecisions.status, "SANCTIONED"), reacceptancePending))!,
+  ];
   if (cur) conds.push(sql`(${schema.financingDecisions.submittedAt}, ${schema.financingDecisions.id}) > (${cur.at}::timestamptz, ${cur.id}::uuid)`);
   const decisions = await ctx.tx.select().from(schema.financingDecisions).where(and(...conds)).orderBy(schema.financingDecisions.submittedAt, schema.financingDecisions.id).limit(limit + 1);
   const page = decisions.slice(0, limit);
@@ -58,7 +67,7 @@ export async function financingQueue(ctx: RequestContext, q: { cursor?: string; 
   const byFile = new Map(files.map((f) => [f.id, f]));
   const data = page.map((d) => {
     const f = byFile.get(d.fileId);
-    return { ...byCase.get(d.caseId), decision: { id: d.id, attemptNo: d.attemptNo, submittedAt: d.submittedAt }, file: f ? { id: f.id, fileNo: f.fileNo, acceptedTotalInr: f.acceptedTotalInr, quoteVersion: f.quoteVersion, acceptedAt: f.acceptedAt } : null };
+    return { ...byCase.get(d.caseId), waitingOn: d.status === "SUBMITTED" ? ("DECISION" as const) : ("REACCEPTANCE" as const), decision: { id: d.id, attemptNo: d.attemptNo, status: d.status, submittedAt: d.submittedAt, decidedAt: d.decidedAt }, file: f ? { id: f.id, fileNo: f.fileNo, acceptedTotalInr: f.acceptedTotalInr, quoteVersion: f.quoteVersion, acceptedAt: f.acceptedAt } : null };
   }).filter((x) => x.id);
   const last = page[page.length - 1];
   return { data, meta: { nextCursor: decisions.length > limit && last ? encodeCursor({ at: last.submittedAt.toISOString(), id: last.id }) : null, limit } };
