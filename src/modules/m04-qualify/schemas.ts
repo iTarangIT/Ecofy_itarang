@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const Assign = z.object({ userId: z.string().uuid(), reason: z.string().max(500).optional() });
 export const BulkAssign = z.object({ caseIds: z.array(z.string().uuid()).min(1).max(500), userId: z.string().uuid(), reason: z.string().max(500).optional() });
+/** POST /cases/bulk-push (docs/CONFLICTS.md #26): push several Warm S0 leads in one go. */
+export const BulkPush = z.object({ caseIds: z.array(z.string().uuid()).min(1).max(500), note: z.string().max(500).optional() });
 export const TemperatureSet = z.object({ temperature: z.enum(["COLD", "WARM", "HOT", "NOT_INTERESTED"]), note: z.string().max(1000).optional(), closureReason: z.string().optional() });
 export const Close = z.object({ closureReason: z.string().min(1), note: z.string().max(1000).optional() });
 export const Return = z.object({ reasonCode: z.string().min(1), note: z.string().max(1000).optional() });

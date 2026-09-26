@@ -65,6 +65,30 @@ describe("R1 — access, qualification, queue, follow-up", () => {
     expect(r.body.error?.gate).toBe("temperature_warm");
   });
 
+  it("bulk push (CONFLICTS #26): Warm S0 leads are pushed, the rest are reported with the gate", async () => {
+    const warm = await createLead(eu);
+    const cold = await createLead(eu);
+    const other = await createLead(eu2);
+    const w = expectOk<{ version: number }>(await eu.post(`/cases/${warm.id}/temperature`, { temperature: "WARM" }, { ifMatch: warm.version }));
+    expect(w.version).toBeGreaterThan(warm.version);
+    const r = expectOk<{ pushed: number; skipped: Array<{ caseId: string; code: string; gate: string | null }> }>(
+      await eu.post("/cases/bulk-push", { caseIds: [warm.id, cold.id, other.id], note: "bulk push" }),
+    );
+    expect(r.pushed).toBe(1);
+    expect(r.skipped).toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: cold.id, code: "GATE_NOT_MET", gate: "temperature_warm" }),
+      expect.objectContaining({ caseId: other.id, code: "NOT_FOUND" }), // the other EU's lead is invisible (RLS)
+    ]));
+    expect(expectOk<{ stage: string }>(await eu.get(`/cases/${warm.id}`)).stage).toBe("S1");
+    expect(expectOk<{ stage: string }>(await eu.get(`/cases/${cold.id}`)).stage).toBe("S0");
+    // a second run skips the already-pushed lead on the stage gate
+    const again = expectOk<{ pushed: number; skipped: Array<{ gate: string | null }> }>(await eu.post("/cases/bulk-push", { caseIds: [warm.id] }));
+    expect(again.pushed).toBe(0);
+    expect(again.skipped[0].gate).toBe("stage");
+    // callers cannot bulk-push
+    expect((await ia.post("/cases/bulk-push", { caseIds: [cold.id] })).status).toBe(403);
+  });
+
   it("queue order: Hot first, then Warm by push time", async () => {
     await resetTestData(t.tenantId);
     const w = await createLead(eu);
