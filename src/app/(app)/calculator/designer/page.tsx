@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, patch, put, uploadDocument, errorMessage } from "@/lib/api";
 import { Banner, Card, Empty } from "@/components/ui/primitives";
+import { FilePicker } from "@/components/ui/file-picker";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/shell/Shell";
 import { Calculator } from "@/components/calculator/Calculator";
@@ -111,7 +112,7 @@ function SystemsEditor({ b, canEdit, run, busy }: { b: Bundle; canEdit: boolean;
       {canEdit && (
         <Card title="Import standard systems (template v0.2)" right={<a className="text-sky" href="/templates/Ecofy_Standard_Systems_Template_v0.2.xlsx">download template</a>}>
           <div className="flex flex-wrap items-end gap-3">
-            <input type="file" accept=".xlsx,.csv" className="text-[12.5px]" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <FilePicker compact file={file} onChange={setFile} hint="template v0.2 (.xlsx or .csv)" />
             <label className="flex items-center gap-1 text-[12.5px]"><input type="checkbox" checked={replaceAll} onChange={(e) => setReplaceAll(e.target.checked)} /> Replace all rows</label>
             <button className="btn btn-primary btn-sm" type="button" disabled={busy || !file} onClick={importFile}>Import</button>
           </div>
