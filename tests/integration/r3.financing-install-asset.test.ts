@@ -33,6 +33,9 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     const s = await sanction(f.id, 210000, { downPaymentInr: 30000, tenureMonths: 36, emiInr: 6500 });
     expect(s.stage).toBe("S6");
     expect(s.subStatus).toBe("REACCEPTANCE_PENDING");
+    // CONFLICTS #27: the File stays in EA's queue, flagged as waiting on the customer's re-acceptance
+    const q2 = expectOk<Array<{ id: string; waitingOn: string; decision: { status: string } }>>(await ea.get("/financing-queue"));
+    expect(q2.find((x) => x.id === f.id)).toMatchObject({ waitingOn: "REACCEPTANCE", decision: { status: "SANCTIONED" } });
     // caller: status only, no amounts anywhere
     const dec = await ic.get(`/cases/${f.id}/financing/decisions`);
     expect(dec.status).toBe(200);
@@ -57,6 +60,7 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     const cur = expectOk<{ stage: string; subStatus: string }>(await ic.get(`/cases/${f.id}`));
     expect(cur.stage).toBe("S7");
     expect(cur.subStatus).toBe("INSTALLING");
+    expect(expectOk<Array<{ id: string }>>(await ea.get("/financing-queue")).some((x) => x.id === f.id)).toBe(false);
   });
 
   it("UAT-24: rejection and routing — Ecofy loses sight once routed; Other NBFC amounts visible only to IA", async () => {
