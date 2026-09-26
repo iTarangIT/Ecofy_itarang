@@ -25,6 +25,8 @@ const schema = z.object({
   STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   MAIL_DRIVER: z.enum(["dev", "ses"]).default("dev"),
   SMS_DRIVER: z.enum(["dev", "gupshup"]).default("dev"),
+  /** Sandbox/test only: echo the plaintext acceptance OTP in the send-OTP response so testers see it on screen. Never enable in production. */
+  OTP_DEV_ECHO: z.enum(["true", "false"]).default("false"),
   QUEUE_DRIVER: z.enum(["inline", "bullmq"]).default("inline"),
 
   LOCAL_STORAGE_DIR: z.string().default(".data/storage"),
@@ -63,6 +65,7 @@ export type Config = z.infer<typeof schema> & {
   cookieSecure: boolean;
   isProd: boolean;
   isTest: boolean;
+  otpDevEcho: boolean;
 };
 
 let cached: Config | undefined;
@@ -81,6 +84,7 @@ export function config(): Config {
     cookieSecure: c.COOKIE_SECURE === "true" || c.NODE_ENV === "production",
     isProd: c.NODE_ENV === "production",
     isTest: c.NODE_ENV === "test",
+    otpDevEcho: c.OTP_DEV_ECHO === "true",
   };
   return cached;
 }
