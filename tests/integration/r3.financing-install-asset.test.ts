@@ -54,8 +54,13 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     expect(last.purpose).toBe("REACCEPTANCE_OTP");
     expect(last.text).toContain("2,10,000");
     expect(last.text).toContain("30,000");
+    // The caller's Offer tab finds the live challenge by case (GET), then verifies it.
+    const live = expectOk<{ challengeId: string; purpose: string; devCode?: string } | null>(await ic.get(`/cases/${f.id}/reacceptance`));
+    expect(live).toMatchObject({ challengeId: otp.challengeId, purpose: "REACCEPTANCE" });
+    expect(live?.devCode).toBeUndefined(); // the code is never re-readable after the send
     const code = await lastOtp();
     const file = expectOk<{ acceptances: Array<{ kind: string }> }>(await ic.post(`/otp/${otp.challengeId}/verify`, { code }));
+    expect(expectOk<unknown>(await ic.get(`/cases/${f.id}/reacceptance`))).toBeNull();
     expect(file.acceptances.map((a) => a.kind)).toEqual(["INITIAL", "REVISED"]);
     const cur = expectOk<{ stage: string; subStatus: string }>(await ic.get(`/cases/${f.id}`));
     expect(cur.stage).toBe("S7");
