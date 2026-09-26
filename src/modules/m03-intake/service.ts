@@ -1,4 +1,4 @@
-import { and, eq, asc, inArray, sql } from "drizzle-orm";
+import { and, eq, asc, desc, inArray, sql } from "drizzle-orm";
 import { schema, type Tx } from "@/core/db/client";
 import { withDbContext } from "@/core/db/tx";
 import { errors } from "@/core/http/errors";
@@ -209,6 +209,11 @@ export async function getImport(ctx: RequestContext, id: string) {
     const linked = await ctx.tx.select({ n: sql<number>`count(*)::int` }).from(schema.importRows).where(and(eq(schema.importRows.batchId, b.id), sql`${schema.importRows.errors} @> '[{"code":"NEW_LINKED"}]'::jsonb`));
     extra.preview = { rowCount: b.rowCount, created: b.createdCount, duplicate: b.duplicateCount, reopened: b.reopenedCount, newLinked: linked[0]?.n ?? 0, rejected: b.rejectedCount, sampleErrors: errRows.flatMap((r) => ((r.errors as RowError[]) ?? []).map((e) => ({ rowNo: r.rowNo, column: e.column, code: e.code, message: e.message }))) };
   }
+  if (b.status === "FAILED") {
+    // The reason lives on the audit row written by failImportBatch (no column on import_batches).
+    const last = (await ctx.tx.select({ reason: schema.auditLog.reason }).from(schema.auditLog).where(and(eq(schema.auditLog.tenantId, ctx.auth.tenantId), eq(schema.auditLog.action, "import.failed"), eq(schema.auditLog.entityId, b.id))).orderBy(desc(schema.auditLog.id)).limit(1))[0];
+    if (last?.reason) extra.failureReason = last.reason;
+  }
   return importOut(b, extra);
 }
 
@@ -410,6 +415,24 @@ export async function runImportBatch(input: { tenantId: string; batchId: string;
     await tx.update(schema.importBatches).set({ status: "COMMITTED", committedAt: now, rowCount: rows.length, createdCount: counts.created, duplicateCount: counts.duplicate, reopenedCount: counts.reopened, rejectedCount: counts.rejected }).where(eq(schema.importBatches.id, b.id));
     await audit(ctx, { action: "import.committed", entityType: "import_batch", entityId: b.id, after: counts });
     await emit(ctx, "import.committed", b.id, { ...counts, notify: [{ userId: input.uploaderId, type: "import.committed", title: `Import ${b.fileName}: ${counts.created} created, ${counts.duplicate} duplicate, ${counts.reopened} reopened, ${counts.rejected} rejected` }] });
+  });
+}
+
+/**
+ * Terminal outcome of the import.process job: the batch cannot be committed (file missing, rows no longer
+ * validate). Runs in its own transaction because the failing run was rolled back. Idempotent: only a batch
+ * still COMMITTING is touched, so a redelivered job is a no-op. Returns whether the batch was marked.
+ */
+export async function failImportBatch(input: { tenantId: string; batchId: string; uploaderId: string; uploaderRole: Role }, reason: string): Promise<boolean> {
+  return withDbContext({ tenantId: input.tenantId, userId: input.uploaderId, role: input.uploaderRole }, async (tx) => {
+    const now = new Date();
+    const ctx: SystemContext = { requestId: `import-`, tenantId: input.tenantId, tx, now };
+    const b = (await tx.select().from(schema.importBatches).where(and(eq(schema.importBatches.tenantId, input.tenantId), eq(schema.importBatches.id, input.batchId))).limit(1))[0];
+    if (!b || b.status !== "COMMITTING") return false;
+    await tx.update(schema.importBatches).set({ status: "FAILED" }).where(eq(schema.importBatches.id, b.id));
+    await audit(ctx, { action: "import.failed", entityType: "import_batch", entityId: b.id, before: { status: b.status }, after: { status: "FAILED" }, reason });
+    await emit(ctx, "import.failed", b.id, { reason, notify: [{ userId: input.uploaderId, type: "import.failed", title: `Import  failed: `, body: "Start a new import with the file." }] });
+    return true;
   });
 }
 

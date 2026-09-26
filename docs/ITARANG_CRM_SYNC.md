@@ -210,5 +210,12 @@ Status 25 Sep 2026 — all three are built in the iTarang CRM (E-305 receiver; E
   (idempotent; creates or activates an ACTIVE iTarang Admin that never logs in, raising the seat cap if needed).
   A user invited through Admin › Users stays INVITED until that person logs in once, which signed calls refuse.
   Then set the three env vars and restart web + worker.
+- **Nothing reaches the CRM, yet the Integration page shows 0 waiting / 0 failed** — the outbox relay is stuck
+  before it ever creates a delivery. The relay publishes outbox rows in id order and retries a failed handler
+  every 2 s for ever, so one poisoned event blocks every later one for the tenant. The worker logs it each tick
+  (pm2 daemon log: `grep -m3 "handler failed" ~/.pm2/pm2.log` as `deploy`). Import jobs whose batch can never
+  commit (file missing, rows no longer validate) now mark the batch FAILED and complete instead of blocking;
+  for any other poisoned event fix the cause, or as a last resort mark the row published:
+  `update outbox_events set published_at = now() where id = …;`
 - Look at stuck deliveries: `select id, event_type, status, attempts, last_status, last_error from integration_deliveries where status <> 'SENT' order by id;`
 - Re-send a parked one: `update integration_deliveries set status = 'PENDING', attempts = 0, next_attempt_at = now() where id = …;`
