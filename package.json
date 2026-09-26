@@ -23,6 +23,7 @@
     "db:seed": "node db/scripts/seed.mjs",
     "db:fixtures": "tsx db/scripts/dev-fixtures.ts",
     "db:integration-user": "node --import tsx db/scripts/ensure-integration-user.ts",
+    "db:demo-assets": "tsx db/scripts/demo-assets.ts",
     "db:pull": "drizzle-kit pull",
     "psql": "node db/scripts/psql.mjs"
   },
