@@ -25,6 +25,13 @@ function fileEnv() {
 const shared = fileEnv();
 const port = shared.PORT || process.env.PORT || 3100;
 
+// The standalone web server chdir()s into .next/standalone while the worker runs from the release root,
+// so cwd-relative dev/local paths would point at two different folders (uploads written by the web
+// process were invisible to the import job). Anchor them to the release root for both processes.
+for (const [key, fallback] of [["LOCAL_STORAGE_DIR", ".data/storage"], ["DEV_MAIL_DIR", ".data/mail"], ["DEV_SMS_DIR", ".data/sms"]]) {
+  shared[key] = path.resolve(__dirname, shared[key] || fallback);
+}
+
 module.exports = {
   apps: [
     {
