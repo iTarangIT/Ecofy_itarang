@@ -37,6 +37,7 @@ export function registerAllRoutes() {
   registerRoute("/imports/:importId/report.csv", () => import("@/app/api/v1/imports/[importId]/report.csv/route"));
   registerRoute("/cases", () => import("@/app/api/v1/cases/route"));
   registerRoute("/cases/bulk-assign", () => import("@/app/api/v1/cases/bulk-assign/route"));
+  registerRoute("/cases/bulk-push", () => import("@/app/api/v1/cases/bulk-push/route"));
   registerRoute("/cases/:caseId", () => import("@/app/api/v1/cases/[caseId]/route"));
   registerRoute("/cases/:caseId/timeline", () => import("@/app/api/v1/cases/[caseId]/timeline/route"));
   registerRoute("/cases/:caseId/assign", () => import("@/app/api/v1/cases/[caseId]/assign/route"));

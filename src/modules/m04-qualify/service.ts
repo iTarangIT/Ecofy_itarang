@@ -205,6 +205,29 @@ export async function pushToItarang(ctx: RequestContext, caseId: string, ifMatch
   return (await caseOut(ctx.tx, ctx.auth.tenantId, ctx.auth.role, [next], { now: ctx.now }))[0];
 }
 
+/**
+ * Bulk push (docs/CONFLICTS.md #26): every selected case goes through pushToItarang with the same gates
+ * (S0, Warm, visible to the caller); one failure never blocks the others. Each pushed case fires its own
+ * outbox event, so the iTarang CRM receives one `lead.pushed` per lead.
+ */
+export async function bulkPush(ctx: RequestContext, input: { caseIds: string[]; note?: string }) {
+  let pushed = 0;
+  const skipped: Array<{ caseId: string; code: string; gate: string | null; message: string }> = [];
+  for (const id of input.caseIds) {
+    try {
+      // savepoint per case so one failure does not poison the transaction
+      await ctx.tx.transaction(async (inner) => {
+        await pushToItarang({ ...ctx, tx: inner }, id, null, { note: input.note });
+      });
+      pushed++;
+    } catch (e) {
+      const err = e as { code?: string; gate?: string; message?: string };
+      skipped.push({ caseId: id, code: err.code ?? "ERROR", gate: err.gate ?? null, message: err.message ?? "Could not push" });
+    }
+  }
+  return { pushed, skipped };
+}
+
 /** FR-14.1 close before acceptance (S0–S4) by the stage owner. */
 export async function closeCase(ctx: RequestContext, caseId: string, ifMatch: number | null, input: { closureReason: string; note?: string }) {
   const c = await lockCase(ctx, caseId, ifMatch);

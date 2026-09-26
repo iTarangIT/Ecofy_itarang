@@ -2,14 +2,24 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { get } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { get, post } from "@/lib/api";
 import { useSession, useCan } from "@/components/shell/Shell";
-import { Card, Empty, Hours, SegPill, StageChip, TempChip } from "@/components/ui/primitives";
+import { Banner, Card, Empty, Hours, SegPill, StageChip, TempChip } from "@/components/ui/primitives";
 import { NewLeadModal } from "@/components/cases/NewLeadModal";
 import { STAGES } from "@/components/ui/primitives";
 import { useUsers, type CaseSummary } from "@/lib/hooks";
 import { isAdmin } from "@/core/auth/rbac";
+
+type BulkPushResult = { pushed: number; skipped: Array<{ caseId: string; code: string; gate: string | null; message: string }> };
+
+/** Why a selected lead was not pushed, in the words of the gate (FR-04.3). */
+function skipReason(s: BulkPushResult["skipped"][number]) {
+  if (s.gate === "temperature_warm") return "not Warm (Hot leads move on their own; set Cold leads to Warm first)";
+  if (s.gate === "stage") return "already past S0";
+  if (s.code === "NOT_FOUND") return "not visible to you";
+  return s.message;
+}
 
 export default function LeadsPage() {
   const s = useSession();
@@ -23,6 +33,20 @@ export default function LeadsPage() {
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setCursor(null); setQ((x) => ({ ...x, [k]: e.target.value })); };
   const canCreate = useCan("cases.create");
   const canImport = useCan("leads.import");
+  const canPush = useCan("cases.push");
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pushResult, setPushResult] = useState<BulkPushResult | null>(null);
+  const rows = cases.data?.data ?? [];
+  const pushable = rows.filter((c) => c.stage === "S0" && c.owner === "ECOFY");
+  const allPushableSelected = pushable.length > 0 && pushable.every((c) => selected.has(c.id));
+  const toggle = (id: string) => setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const toggleAll = () => setSelected(allPushableSelected ? new Set() : new Set(pushable.map((c) => c.id)));
+  const bulkPush = useMutation({
+    mutationFn: () => post<BulkPushResult>("/cases/bulk-push", { caseIds: [...selected] }),
+    onSuccess: (r) => { setPushResult(r.data); setSelected(new Set()); void qc.invalidateQueries({ queryKey: ["cases"] }); },
+  });
+  const caseNo = (id: string) => rows.find((c) => c.id === id)?.caseNo ?? id;
 
   return (
     <div className="space-y-4">
@@ -39,11 +63,30 @@ export default function LeadsPage() {
           {admin && <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" onChange={(e) => setQ((x) => ({ ...x, unassigned: e.target.checked ? "true" : "" }))} /> Unassigned</label>}
           <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" onChange={(e) => setQ((x) => ({ ...x, overdue: e.target.checked ? "true" : "" }))} /> Overdue follow-up</label>
         </div>
+        {canPush && selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-sky/5 px-4 py-2 text-[12.5px]">
+            <span><b>{selected.size}</b> selected</span>
+            <button className="btn btn-sm btn-primary" type="button" disabled={bulkPush.isPending} onClick={() => bulkPush.mutate()}>{bulkPush.isPending ? "Pushing…" : "Push selected to iTarang"}</button>
+            <button className="btn btn-sm" type="button" onClick={() => setSelected(new Set())}>Clear</button>
+            <span className="text-muted">Only Warm leads at S0 are pushed; the rest are reported.</span>
+          </div>
+        )}
+        {bulkPush.isError && <div className="px-4 py-2"><Banner kind="red">Bulk push failed: {(bulkPush.error as Error).message}</Banner></div>}
+        {pushResult && (
+          <div className="px-4 py-2">
+            <Banner kind={pushResult.skipped.length ? "amber" : "green"}>
+              Pushed {pushResult.pushed} lead{pushResult.pushed === 1 ? "" : "s"} to iTarang.
+              {pushResult.skipped.length > 0 && <> Skipped {pushResult.skipped.length}: {pushResult.skipped.map((x) => `${caseNo(x.caseId)} (${skipReason(x)})`).join("; ")}.</>}
+              <button className="ml-2 underline" type="button" onClick={() => setPushResult(null)}>Dismiss</button>
+            </Banner>
+          </div>
+        )}
         <table className="w-full">
-          <thead><tr><th className="th">Case</th><th className="th">Customer</th><th className="th">Segment</th><th className="th">Temp</th><th className="th">Stage</th><th className="th">Owner / assignee</th><th className="th">In stage</th><th className="th">Updated</th></tr></thead>
+          <thead><tr>{canPush && <th className="th w-8"><input type="checkbox" aria-label="Select all S0 leads" checked={allPushableSelected} disabled={pushable.length === 0} onChange={toggleAll} /></th>}<th className="th">Case</th><th className="th">Customer</th><th className="th">Segment</th><th className="th">Temp</th><th className="th">Stage</th><th className="th">Owner / assignee</th><th className="th">In stage</th><th className="th">Updated</th></tr></thead>
           <tbody>
-            {(cases.data?.data ?? []).map((c) => (
+            {rows.map((c) => (
               <tr key={c.id} className="rowlink" onClick={() => (window.location.href = `/cases/${c.id}`)}>
+                {canPush && <td className="td" onClick={(e) => e.stopPropagation()}>{c.stage === "S0" && c.owner === "ECOFY" && <input type="checkbox" aria-label={`Select ${c.caseNo}`} checked={selected.has(c.id)} onChange={() => toggle(c.id)} />}</td>}
                 <td className="td"><Link className="mono text-sky" href={`/cases/${c.id}`}>{c.caseNo}</Link></td>
                 <td className="td"><div className="font-semibold">{c.customer?.fullName}</div><div className="text-[12px] text-muted">{c.customer?.city} · <span className="mono">{c.customer?.mobile}</span></div></td>
                 <td className="td"><SegPill segment={c.segment} /></td>
