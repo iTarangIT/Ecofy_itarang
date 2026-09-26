@@ -7,7 +7,7 @@ import { Banner, Card, Field } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
 import { useSettings } from "@/lib/hooks";
 
-type ImportView = { id: string; status: string; fileName: string; rowCount: number; headers?: string[]; suggestedMapping?: Record<string, string | null>; savedMappings?: Array<{ id: string; sourceName: string; mapping: Record<string, string> }>; uploadPending?: boolean; preview?: Preview };
+type ImportView = { id: string; status: string; fileName: string; rowCount: number; headers?: string[]; suggestedMapping?: Record<string, string | null>; savedMappings?: Array<{ id: string; sourceName: string; mapping: Record<string, string> }>; uploadPending?: boolean; failureReason?: string; preview?: Preview };
 type Preview = { rowCount: number; created: number; duplicate: number; reopened: number; newLinked: number; rejected: number; sampleErrors: Array<{ rowNo: number; column?: string; code: string; message: string }> };
 
 const COLUMNS = ["customer_name", "mobile", "segment", "pincode", "consent_obtained", "consent_date", "consent_source", "city", "state", "address", "customer_type", "business_name", "ecofy_lead_id", "alternate_mobile", "email", "preferred_language", "property_type", "product_interest", "avg_monthly_bill_inr", "sanctioned_load_kw", "existing_backup", "preferred_call_time", "assign_to"];
@@ -121,6 +121,7 @@ export default function ImportPage() {
             <label className="flex items-start gap-2 rounded-lg bg-page p-3 text-[12.5px]"><input type="checkbox" className="mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} /><span>{attestation || "Loading attestation text…"}</span></label>
             <button className="btn btn-green" type="button" disabled={busy || !consent || !(preview ?? view?.preview) || view?.status === "COMMITTED" || view?.status === "COMMITTING"} onClick={commit}>Commit import</button>
             {view?.status === "COMMITTING" && <div className="text-[12.5px] text-muted">Processing rows in chunks of 500…</div>}
+            {view?.status === "FAILED" && <div className="banner banner-red">Import failed{view.failureReason ? `: ${view.failureReason}` : ""}. Start a new import with the file.</div>}
             {view?.status === "COMMITTED" && (
               <div className="space-y-2">
                 <div className="banner banner-green">Committed. {view.preview?.created} created · {view.preview?.duplicate} duplicate · {view.preview?.reopened} reopened · {view.preview?.rejected} rejected.</div>

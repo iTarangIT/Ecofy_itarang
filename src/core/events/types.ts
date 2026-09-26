@@ -13,7 +13,7 @@ export const EVENT_TYPES = [
   "asset.activated", "emi.updated", "asset.event_recorded",
   "withdrawal.requested", "withdrawal.confirmed",
   "document.uploaded", "document.purged",
-  "import.committed", "setting.changed", "list.changed", "seat.limit_changed", "export.generated",
+  "import.committed", "import.failed", "setting.changed", "list.changed", "seat.limit_changed", "export.generated",
   "user.invited", "user.deactivated", "notification.created",
   // jobs requested through the outbox (so both queue drivers share one path)
   "job.import.process", "job.email.send", "job.sms.send",
