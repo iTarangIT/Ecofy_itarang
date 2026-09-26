@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/toast";
 type Assessment = { id: string; version: number; recommendationStatus: string; confirmedAt: string | null };
 type Quote = { id: string; version: number; status: string; provisional: boolean; provisionalReason: string | null; systemDesc: string; equipmentInr: number; installationInr: number; gstInr: number; totalInr: number; validUntil: string; notes: string | null; documentId: string; createdAt: string };
 type Offer = { id: string; version: number; status: string; limitCheck: "WITHIN" | "ABOVE" | "UNKNOWN"; provisional: boolean; content: { system: string; equipmentInr: number; installationInr: number; gstInr: number; totalInr: number; financingLine: string; provisionalReason: string | null; validUntil: string }; sentAt: string | null };
-type Otp = { challengeId: string; status: string; expiresAt: string; maskedMobile: string; attemptsRemaining: number; resendAfterSeconds: number };
+type Otp = { challengeId: string; status: string; expiresAt: string; maskedMobile: string; attemptsRemaining: number; resendAfterSeconds: number; devCode?: string };
 type FileRec = { id: string; fileNo: string; acceptedTotalInr: number; quoteVersion: number; acceptedAt: string; provisional: boolean; acceptances: Array<{ kind: string; acceptedAt: string }> };
 
 /** M09 + M10: eligibility, EPC quote (versions), offer (within/above limit), OTP and File. */
@@ -111,6 +111,7 @@ export function OfferTab({ c, onChange }: { c: CaseSummary; onChange: () => void
               <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
                 <button className="btn btn-primary" type="button" disabled={busy} onClick={() => run(c.stage === "S4" ? "OTP sent — case at S5" : "OTP re-sent", async () => { const r = await post<Otp>(`/offers/${liveOffer.id}/otp`, undefined, { ifMatch: c.version, idempotent: true }); setOtp(r.data); })}>{c.stage === "S4" ? "Send offer — SMS OTP to customer" : "Resend OTP"}</button>
                 {otp && <span className="text-muted">Sent to {otp.maskedMobile}, expires {fmtDateTime(otp.expiresAt)} · {otp.attemptsRemaining} attempts</span>}
+                {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
               </div>
             )}
             {itarang && c.stage === "S5" && (

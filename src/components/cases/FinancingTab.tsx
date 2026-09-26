@@ -9,7 +9,7 @@ import { Card, Empty, Field } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
 
 type Decision = { id: string; attemptNo: number; status: string; financierName: string | null; rejectionReason: string | null; submittedAt: string; decidedAt: string | null; values?: { sanctionedInr: number; downPaymentInr: number | null; tenureMonths: number | null; emiInr: number | null; lenderFileNo: string | null } };
-type Otp = { challengeId: string; maskedMobile: string; expiresAt: string };
+type Otp = { challengeId: string; maskedMobile: string; expiresAt: string; devCode?: string };
 type DP = { id: string; receivedOn: string; amountInr: number; reference: string | null };
 
 /** M11 + M12 money: decisions (values only for the financier's role), re-acceptance, down payment, disbursement. */
@@ -64,7 +64,8 @@ export function FinancingTab({ c, onChange }: { c: CaseSummary; onChange: () => 
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#f0dcaf] bg-warn-soft p-3 text-[12.5px]">
             <span>Sanction is below the accepted total. Trigger the re-acceptance OTP; the SMS carries the financed amount and down payment (built from your values, never shown to the caller).</span>
             <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => run("Re-acceptance OTP sent", async () => { const r = await post<Otp>(`/cases/${c.id}/reacceptance`, { decisionId: sanctioned.id }, { idempotent: true }); setOtp(r.data); })}>Trigger re-acceptance</button>
-            {otp && <span className="text-muted">sent to {otp.maskedMobile}; the caller verifies the code in the Offer tab (challenge {otp.challengeId.slice(0, 8)}…)</span>}
+            {otp && <span className="text-muted">sent to {otp.maskedMobile}, expires {fmtDateTime(otp.expiresAt)}; the caller verifies the code in the Offer tab (challenge {otp.challengeId.slice(0, 8)}…)</span>}
+            {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
           </div>
         )}
       </Card>
