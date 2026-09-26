@@ -122,6 +122,7 @@ export function OfferTab({ c, onChange }: { c: CaseSummary; onChange: () => void
                 {reacceptance.data?.data ? (
                   <>
                     <span className="text-[12px] text-muted">Sent to {reacceptance.data.data.maskedMobile}, expires {fmtDateTime(reacceptance.data.data.expiresAt)} · {reacceptance.data.data.attemptsRemaining} attempts</span>
+                    {reacceptance.data.data.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {reacceptance.data.data.devCode}</span>}
                     <Field label="Customer's OTP" hint="6 digits · 5 attempts · 10 minutes"><input className="input mono w-40 text-center tracking-[0.3em]" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} /></Field>
                     <button className="btn btn-green" type="button" disabled={busy || code.length !== 6} onClick={() => run("Re-accepted — revised terms confirmed, case at S7", async () => { await post(`/otp/${reacceptance.data!.data!.challengeId}/verify`, { code }); setCode(""); })}>Verify re-acceptance</button>
                   </>
