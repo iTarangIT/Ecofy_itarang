@@ -105,6 +105,8 @@ export async function fileOut(tx: Tx, f: FileRow) {
 export async function verifyOtp(ctx: RequestContext, challengeId: string, code: string) {
   const ch = (await ctx.tx.select().from(schema.otpChallenges).where(and(eq(schema.otpChallenges.tenantId, ctx.auth.tenantId), eq(schema.otpChallenges.id, challengeId))).limit(1))[0];
   if (!ch) throw errors.notFound("OTP challenge");
+  // CONFLICTS #28: Ecofy Admin may verify the re-acceptance code it triggered; the initial acceptance stays with iTarang.
+  if (ctx.auth.role === "ECOFY_ADMIN" && ch.purpose !== "REACCEPTANCE") throw errors.forbidden("Ecofy Admin verifies re-acceptance OTPs only; the caller verifies the initial acceptance");
   const c = await lockCase(ctx, ch.caseId, null);
   const s = await otpSettings(c.tenantId, ctx.tx);
   if (ch.status === "VERIFIED") return finishAfterVerify(ctx, c, ch, true);

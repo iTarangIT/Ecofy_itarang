@@ -24,8 +24,11 @@ export function FinancingTab({ c, onChange }: { c: CaseSummary; onChange: () => 
   const [dp, setDp] = useState({ receivedOn: todayIso(), amountInr: "", reference: "" });
   const [disb, setDisb] = useState({ disbursedOn: todayIso(), amountInr: "", reference: "" });
   const [otp, setOtp] = useState<Otp | null>(null);
+  const [code, setCode] = useState("");
+  const reacceptancePending = c.stage === "S6" && c.subStatus === "REACCEPTANCE_PENDING";
+  const live = useQuery({ queryKey: ["reacceptance", c.id], queryFn: () => get<Otp | null>(`/cases/${c.id}/reacceptance`), enabled: s.role === "ECOFY_ADMIN" && reacceptancePending });
   const [busy, setBusy] = useState(false);
-  const refresh = () => { ["decisions", "downpayments", "paystatus"].forEach((k) => qc.invalidateQueries({ queryKey: [k, c.id] })); onChange(); };
+  const refresh = () => { ["decisions", "downpayments", "paystatus", "reacceptance"].forEach((k) => qc.invalidateQueries({ queryKey: [k, c.id] })); onChange(); };
   const run = async (label: string, fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); toast(label); refresh(); } catch (e) { toast(errorMessage(e), "bad"); } finally { setBusy(false); } };
   const open = decisions.data?.data.find((d) => d.status === "SUBMITTED");
   const sanctioned = decisions.data?.data.filter((d) => d.status === "SANCTIONED").slice(-1)[0];
@@ -60,14 +63,26 @@ export function FinancingTab({ c, onChange }: { c: CaseSummary; onChange: () => 
             <div className="col-span-3 flex justify-end"><button className="btn btn-green" type="submit" disabled={busy}>Record decision</button></div>
           </form>
         )}
-        {s.role === "ECOFY_ADMIN" && c.subStatus === "REACCEPTANCE_PENDING" && sanctioned && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#f0dcaf] bg-warn-soft p-3 text-[12.5px]">
-            <span>Sanction is below the accepted total. Trigger the re-acceptance OTP; the SMS carries the financed amount and down payment (built from your values, never shown to the caller).</span>
-            <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => run("Re-acceptance OTP sent", async () => { const r = await post<Otp>(`/cases/${c.id}/reacceptance`, { decisionId: sanctioned.id }, { idempotent: true }); setOtp(r.data); })}>Trigger re-acceptance</button>
-            {otp && <span className="text-muted">sent to {otp.maskedMobile}, expires {fmtDateTime(otp.expiresAt)}; the caller verifies the code in the Offer tab (challenge {otp.challengeId.slice(0, 8)}…)</span>}
-            {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
-          </div>
-        )}
+        {s.role === "ECOFY_ADMIN" && reacceptancePending && sanctioned && (() => {
+          const challenge = otp ?? live.data?.data ?? null;
+          return (
+            <div className="mt-3 space-y-2 rounded-lg border border-[#f0dcaf] bg-warn-soft p-3 text-[12.5px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Sanction is below the accepted total. Trigger the re-acceptance OTP; the SMS carries the financed amount and down payment (built from your values, never shown to the caller).</span>
+                <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => run("Re-acceptance OTP sent", async () => { const r = await post<Otp>(`/cases/${c.id}/reacceptance`, { decisionId: sanctioned.id }, { idempotent: true }); setOtp(r.data); setCode(""); })}>{challenge ? "Resend re-acceptance OTP" : "Trigger re-acceptance"}</button>
+                {challenge && <span className="text-muted">sent to {challenge.maskedMobile}, expires {fmtDateTime(challenge.expiresAt)}</span>}
+                {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
+              </div>
+              {challenge && (
+                <div className="flex flex-wrap items-end gap-2 border-t border-[#f0dcaf] pt-2">
+                  <Field label="Customer's OTP" hint="6 digits · the code the customer reads out"><input className="input mono w-40 text-center tracking-[0.3em]" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} /></Field>
+                  <button className="btn btn-green" type="button" disabled={busy || code.length !== 6} onClick={() => run("Re-accepted — revised terms confirmed, case at S7", async () => { await post(`/otp/${challenge.challengeId}/verify`, { code }); setCode(""); setOtp(null); })}>Verify re-acceptance</button>
+                  <span className="text-[12px] text-muted">The caller can also verify it from the Offer tab.</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Card>
       <Card title="Down payment & disbursement" right={status.data ? `down payment ${status.data.data.downPaymentRecorded ? "recorded" : "not recorded"} · disbursement ${status.data.data.disbursementRecorded ? "recorded" : "not recorded"}` : ""}>
         {admin && (dps.data?.data ?? []).length > 0 && <table className="mb-3 w-full text-[12.5px]"><tbody>{dps.data!.data.map((d) => <tr key={d.id}><td className="td">Down payment received {d.receivedOn}</td><td className="td mono">{inr(d.amountInr)}</td><td className="td text-muted">{d.reference}</td></tr>)}</tbody></table>}

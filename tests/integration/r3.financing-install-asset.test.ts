@@ -59,7 +59,8 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     expect(live).toMatchObject({ challengeId: otp.challengeId, purpose: "REACCEPTANCE" });
     expect(live?.devCode).toBeUndefined(); // the code is never re-readable after the send
     const code = await lastOtp();
-    const file = expectOk<{ acceptances: Array<{ kind: string }> }>(await ic.post(`/otp/${otp.challengeId}/verify`, { code }));
+    // CONFLICTS #28: Ecofy Admin verifies the re-acceptance code itself (the caller may too)
+    const file = expectOk<{ acceptances: Array<{ kind: string }> }>(await ea.post(`/otp/${otp.challengeId}/verify`, { code }));
     expect(expectOk<unknown>(await ic.get(`/cases/${f.id}/reacceptance`))).toBeNull();
     expect(file.acceptances.map((a) => a.kind)).toEqual(["INITIAL", "REVISED"]);
     const cur = expectOk<{ stage: string; subStatus: string }>(await ic.get(`/cases/${f.id}`));
