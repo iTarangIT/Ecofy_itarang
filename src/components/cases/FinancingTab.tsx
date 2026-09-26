@@ -71,7 +71,7 @@ export function FinancingTab({ c, onChange }: { c: CaseSummary; onChange: () => 
                 <span>Sanction is below the accepted total. Trigger the re-acceptance OTP; the SMS carries the financed amount and down payment (built from your values, never shown to the caller).</span>
                 <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => run("Re-acceptance OTP sent", async () => { const r = await post<Otp>(`/cases/${c.id}/reacceptance`, { decisionId: sanctioned.id }, { idempotent: true }); setOtp(r.data); setCode(""); })}>{challenge ? "Resend re-acceptance OTP" : "Trigger re-acceptance"}</button>
                 {challenge && <span className="text-muted">sent to {challenge.maskedMobile}, expires {fmtDateTime(challenge.expiresAt)}</span>}
-                {otp?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {otp.devCode}</span>}
+                {challenge?.devCode && <span className="chip bg-warn-soft text-warn mono text-[14px] tracking-[0.25em]" title="Sandbox only: OTP_DEV_ECHO is on, so the customer's code is shown here">Sandbox OTP {challenge.devCode}</span>}
               </div>
               {challenge && (
                 <div className="flex flex-wrap items-end gap-2 border-t border-[#f0dcaf] pt-2">

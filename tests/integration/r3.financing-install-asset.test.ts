@@ -57,8 +57,9 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     // The caller's Offer tab finds the live challenge by case (GET), then verifies it.
     const live = expectOk<{ challengeId: string; purpose: string; devCode?: string } | null>(await ic.get(`/cases/${f.id}/reacceptance`));
     expect(live).toMatchObject({ challengeId: otp.challengeId, purpose: "REACCEPTANCE" });
-    expect(live?.devCode).toBeUndefined(); // the code is never re-readable after the send
     const code = await lastOtp();
+    expect(live?.devCode).toBe(code); // OTP_DEV_ECHO (test/sandbox): the live challenge re-shows the code from the queued SMS
+    expect(expectOk<{ devCode?: string }>(await ea.get(`/otp/${otp.challengeId}`)).devCode).toBe(code);
     // CONFLICTS #28: Ecofy Admin verifies the re-acceptance code itself (the caller may too)
     const file = expectOk<{ acceptances: Array<{ kind: string }> }>(await ea.post(`/otp/${otp.challengeId}/verify`, { code }));
     expect(expectOk<unknown>(await ic.get(`/cases/${f.id}/reacceptance`))).toBeNull();

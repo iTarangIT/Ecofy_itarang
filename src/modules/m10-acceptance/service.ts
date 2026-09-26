@@ -191,12 +191,31 @@ export async function fileOfCase(ctx: RequestContext, caseId: string) {
  * challenge that Ecofy Admin triggered from the Financing tab, so the customer's code can be verified at S6.
  * Never carries the code: the plaintext exists only in the trigger response (devCode, sandbox) and the SMS.
  */
+/**
+ * Sandbox only (OTP_DEV_ECHO=true): re-read the plaintext of a live challenge so a page opened after the send can
+ * still show it. The code is never stored; it is taken from the queued SMS text in the outbox (same transaction
+ * boundary as the send) and accepted only when it hashes to the challenge's code_hash. Returns undefined otherwise.
+ */
+async function recoverDevCode(tx: Tx, ch: OtpRow, length: number): Promise<string | undefined> {
+  if (!config().otpDevEcho || ch.status !== "SENT") return undefined;
+  const since = new Date(new Date(ch.sentAt).getTime() - 60_000);
+  const rows = await tx.select({ payload: schema.outboxEvents.payload }).from(schema.outboxEvents)
+    .where(and(eq(schema.outboxEvents.tenantId, ch.tenantId), eq(schema.outboxEvents.eventType, "job.sms.send"), eq(schema.outboxEvents.aggregateId, ch.caseId), gte(schema.outboxEvents.createdAt, since)))
+    .orderBy(desc(schema.outboxEvents.id)).limit(10);
+  const digits = new RegExp(`\\d{${length}}`, "g");
+  for (const r of rows) {
+    const text = String((r.payload as { text?: unknown } | null)?.text ?? "");
+    for (const m of text.matchAll(digits)) if (hashCode(m[0]) === ch.codeHash) return m[0];
+  }
+  return undefined;
+}
+
 export async function liveReacceptanceChallenge(ctx: RequestContext, caseId: string) {
   const c = await requireCase(ctx, caseId);
   const ch = (await ctx.tx.select().from(schema.otpChallenges).where(and(eq(schema.otpChallenges.caseId, c.id), eq(schema.otpChallenges.purpose, "REACCEPTANCE"), eq(schema.otpChallenges.status, "SENT"))).orderBy(desc(schema.otpChallenges.sentAt)).limit(1))[0];
   if (!ch) return null;
   const s = await otpSettings(c.tenantId, ctx.tx);
-  return otpOut(ch, s.maxAttempts, s.resendAfter);
+  return otpOut(ch, s.maxAttempts, s.resendAfter, await recoverDevCode(ctx.tx, ch, s.length));
 }
 
 export async function otpStatus(ctx: RequestContext, challengeId: string) {
@@ -204,7 +223,7 @@ export async function otpStatus(ctx: RequestContext, challengeId: string) {
   if (!ch) throw errors.notFound("OTP challenge");
   await requireCase(ctx, ch.caseId);
   const s = await otpSettings(ch.tenantId, ctx.tx);
-  return otpOut(ch, s.maxAttempts, s.resendAfter);
+  return otpOut(ch, s.maxAttempts, s.resendAfter, await recoverDevCode(ctx.tx, ch, s.length));
 }
 
 void sql;
