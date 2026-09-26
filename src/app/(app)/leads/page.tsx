@@ -22,11 +22,12 @@ export default function LeadsPage() {
   const cases = useQuery({ queryKey: ["cases", params.toString()], queryFn: () => get<CaseSummary[]>(`/cases?${params.toString()}`) });
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setCursor(null); setQ((x) => ({ ...x, [k]: e.target.value })); };
   const canCreate = useCan("cases.create");
+  const canImport = useCan("leads.import");
 
   return (
     <div className="space-y-4">
       <Card title="Leads & cases" right={<div className="flex items-center gap-2">
-        {admin && <Link className="btn btn-sm btn-green" href="/leads/import">⬆ Import leads</Link>}
+        {canImport && <Link className="btn btn-sm btn-green" href="/leads/import">⬆ Import leads</Link>}
         {canCreate && <button className="btn btn-sm btn-primary" type="button" onClick={() => setNewOpen(true)}>+ New lead</button>}
       </div>} pad={false}>
         <div className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">

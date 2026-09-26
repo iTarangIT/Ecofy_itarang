@@ -8,6 +8,8 @@ export type OrgKind = "ECOFY" | "ITARANG";
 
 export const ALL_ROLES: readonly Role[] = ROLES;
 export const ADMINS: readonly Role[] = ["ECOFY_ADMIN", "ITARANG_ADMIN"];
+/** Roles that may bulk-upload leads (docs/CONFLICTS.md #25: Ecofy Users upload too, into their own S0 queue). */
+export const IMPORTERS: readonly Role[] = ["ECOFY_ADMIN", "ECOFY_USER", "ITARANG_ADMIN"];
 export const ECOFY_ROLES: readonly Role[] = ["ECOFY_ADMIN", "ECOFY_USER"];
 export const ITARANG_ROLES: readonly Role[] = ["ITARANG_ADMIN", "ITARANG_CALLER"];
 
@@ -45,7 +47,7 @@ export const PERMISSIONS: Record<Role, string[]> = {
     "calculator.approve", "settings.view", "users.manage.ecofy", "dashboards.all", "export", "audit.view", "usage.view",
   ],
   ECOFY_USER: [
-    "cases.create", "cases.temperature", "cases.push", "cases.close", "activities.log", "calculator.run",
+    "leads.import", "cases.create", "cases.temperature", "cases.push", "cases.close", "activities.log", "calculator.run",
     "assessments.save", "dashboards.own",
   ],
   ITARANG_ADMIN: [

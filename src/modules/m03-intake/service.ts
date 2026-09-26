@@ -161,7 +161,7 @@ export function importOut(b: ImportBatch, extra: Record<string, unknown> = {}) {
 
 async function loadBatch(ctx: RequestContext, id: string): Promise<ImportBatch> {
   const b = (await ctx.tx.select().from(schema.importBatches).where(and(eq(schema.importBatches.tenantId, ctx.auth.tenantId), eq(schema.importBatches.id, id))).limit(1))[0];
-  if (!b) throw errors.notFound("Import");
+  if (!b || (ctx.auth.role === "ECOFY_USER" && b.uploadedBy !== ctx.auth.userId)) throw errors.notFound("Import"); // an Ecofy User sees only their own imports
   return b;
 }
 
@@ -258,6 +258,7 @@ async function validateRows(tx: Tx, tenantId: string, b: ImportBatch, uploaderRo
   const today = istDate(now);
   const seenMobiles = new Set<string>();
   const isIa = uploaderRole === "ITARANG_ADMIN";
+  const isEu = uploaderRole === "ECOFY_USER"; // CONFLICTS #25: an Ecofy User's rows land in their own S0 queue (assign_to may name a colleague)
 
   const out: ValidatedRow[] = [];
   parsed.rows.forEach((raw, i) => {
@@ -326,7 +327,7 @@ async function validateRows(tx: Tx, tenantId: string, b: ImportBatch, uploaderRo
       },
       segment: segment as "RESI" | "ESS" | "CI", productInterest, avgMonthlyBillInr: bill, sanctionedLoadKw: load, existingBackup, preferredCallTime, ecofyLeadId: get("ecofy_lead_id") || null,
       source: isIa ? "ITARANG_SOURCED" : "ECOFY_UPLOAD", ownerKind: isIa ? "ITARANG" : "ECOFY", startStage: isIa ? "S1" : "S0",
-      assignTo: isIa ? null : assignTo, qualifiedBy: null, importBatchId: b.id, createdBy: uploaderId,
+      assignTo: isIa ? null : (assignTo ?? (isEu ? uploaderId : null)), qualifiedBy: isEu ? uploaderId : null, importBatchId: b.id, createdBy: uploaderId,
     };
     out.push({ rowNo, raw, lead, errors: [], predicted: "CREATED" });
   });
@@ -380,9 +381,15 @@ export async function commitImport(ctx: RequestContext, id: string, input: { con
   return importOut(updated);
 }
 
-/** Worker entry (import.process): re-validates and writes rows in chunks of 500 in the uploader's context. */
+/**
+ * Worker entry (import.process): re-validates and writes rows in chunks of 500 in the uploader's context.
+ * An Ecofy User's batch runs with Ecofy Admin visibility (the uploader stays the actor): RLS would hide a colleague's
+ * open case for the same mobile, and the one-open-case-per-customer rule would then fail the whole batch
+ * instead of linking the row (FR-03.6). The rows themselves stay assigned to / qualified by the uploader.
+ */
 export async function runImportBatch(input: { tenantId: string; batchId: string; uploaderId: string; uploaderRole: Role }) {
-  await withDbContext({ tenantId: input.tenantId, userId: input.uploaderId, role: input.uploaderRole }, async (tx) => {
+  const dbRole: Role = input.uploaderRole === "ECOFY_USER" ? "ECOFY_ADMIN" : input.uploaderRole;
+  await withDbContext({ tenantId: input.tenantId, userId: input.uploaderId, role: dbRole }, async (tx) => {
     const now = new Date();
     const ctx: SystemContext = { requestId: `import-${input.batchId}`, tenantId: input.tenantId, tx, now };
     const b = (await tx.select().from(schema.importBatches).where(and(eq(schema.importBatches.tenantId, input.tenantId), eq(schema.importBatches.id, input.batchId))).limit(1))[0];
