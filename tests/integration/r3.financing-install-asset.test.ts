@@ -143,6 +143,11 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     expect((await ia.post(`/cases/${f.id}/down-payment`, { receivedOn: "2026-09-24", amountInr: 40000 })).status).toBe(403);
     expectOk(await ea.post(`/cases/${f.id}/down-payment`, { receivedOn: "2026-09-24", amountInr: 40000, reference: "UTR123" }), 201);
     expect(expectOk<Array<{ amountInr: number }>>(await ea.get(`/cases/${f.id}/down-payment`))[0].amountInr).toBe(40000);
+    // one down payment per case: a repeat (double-click, retry) is refused and leaves a single row
+    const again = await ea.post(`/cases/${f.id}/down-payment`, { receivedOn: "2026-09-24", amountInr: 40000, reference: "UTR123" });
+    expect(again.status).toBe(422);
+    expect(again.body.error?.message).toMatch(/already recorded/);
+    expect(expectOk<unknown[]>(await ea.get(`/cases/${f.id}/down-payment`)).length).toBe(1);
     expect(expectOk<unknown[]>(await ia.get(`/cases/${f.id}/down-payment`))).toEqual([]); // RLS hides Ecofy's amounts from IA
     expect(expectOk<{ downPaymentRecorded: boolean }>(await ia.get(`/cases/${f.id}/payment-status`)).downPaymentRecorded).toBe(true);
     const cur = expectOk<{ version: number }>(await ea.get(`/cases/${f.id}`));

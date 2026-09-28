@@ -45,6 +45,14 @@ export async function sendForEligibility(ctx: RequestContext, caseId: string, in
   return { id: row.id, status: row.status, financierId, requestedAt: row.requestedAt };
 }
 
+/** The case's latest eligibility check (status only — the amount stays in eligibility_values). Any role may read it. */
+export async function latestEligibility(ctx: RequestContext, caseId: string) {
+  const c = await requireCase(ctx, caseId);
+  const ch = (await ctx.tx.select().from(schema.eligibilityChecks).where(eq(schema.eligibilityChecks.caseId, c.id)).orderBy(desc(schema.eligibilityChecks.requestedAt)).limit(1))[0];
+  if (!ch) return null;
+  return { id: ch.id, financierId: ch.financierId, status: ch.status, reason: ch.reason, requestedAt: ch.requestedAt, decidedAt: ch.decidedAt };
+}
+
 /** EA: Ecofy's queue; IA: other financiers' queue (role per financier). */
 export async function eligibilityQueue(ctx: RequestContext, q: { cursor?: string; limit?: number }) {
   const limit = q.limit ?? 50;

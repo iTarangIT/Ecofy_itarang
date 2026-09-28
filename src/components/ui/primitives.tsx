@@ -63,25 +63,38 @@ export function OwnerBadge({ owner }: { owner: "ECOFY" | "ITARANG" | "EPC" }) {
   return <span className={clsx("chip text-[10.5px] font-bold uppercase", cls)}>{label}</span>;
 }
 
-/** The stage rail: S0 → S8 with owner colours (prototype pattern). */
-export function StageRail({ stage }: { stage: string }) {
-  const idx = STAGES.indexOf(stage);
+/**
+ * The stage rail: S0 → S8 with owner colours (prototype pattern). `tone`
+ * colours the current node by whose turn it is (indigo = the viewer acts,
+ * amber = waiting on another party, navy = done) and `partyLabel` is pinned
+ * under it ("You are here" / "Pending: iTarang"), so the current step is
+ * never in doubt. The connector is solid up to the current node, dashed after.
+ */
+export function StageRail({ stage, tone = "action", partyLabel }: { stage: string; tone?: "action" | "waiting" | "done"; partyLabel?: string }) {
+  const idx = stage === "CLOSED" ? STAGES.length : STAGES.indexOf(stage);
+  const node = {
+    action: "border-transparent bg-gradient-to-br from-indigo-600 to-violet-600 text-white ring-4 ring-indigo-100",
+    waiting: "border-transparent bg-warn text-white ring-4 ring-warn-soft",
+    done: "border-navy bg-navy text-white ring-4 ring-chip",
+  }[tone];
+  const pill = { action: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white", waiting: "bg-warn text-white", done: "bg-navy text-white" }[tone];
   return (
     <ol className="flex items-start gap-0 overflow-x-auto py-1">
       {STAGES.map((s, i) => {
-        const done = idx > i || stage === "S8" && i === 8;
+        const done = idx > i || (stage === "S8" && i === 8);
         const current = idx === i;
         const owner = STAGE_OWNER[s];
         const ownerCls = owner === "ECOFY" ? "text-ecofy" : owner === "EPC" ? "text-epc" : "text-sky";
         return (
           <li key={s} className="flex min-w-[96px] flex-1 flex-col items-center text-center">
             <div className="flex w-full items-center">
-              <div className={clsx("h-0.5 flex-1", i === 0 ? "bg-transparent" : done || current ? "bg-navy" : "bg-line")} />
-              <div className={clsx("flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold", done ? "border-navy bg-navy text-white" : current ? "border-sky bg-sky text-white" : "border-silver bg-white text-muted")}>{done ? "✓" : current ? "●" : i}</div>
-              <div className={clsx("h-0.5 flex-1", i === STAGES.length - 1 ? "bg-transparent" : done ? "bg-navy" : "bg-line")} />
+              <div className={clsx("flex-1", i === 0 ? "h-0.5 bg-transparent" : done || current ? "h-0.5 bg-navy" : "border-t-2 border-dashed border-line")} />
+              <div className={clsx("flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold", current ? node : done ? "border-navy bg-navy text-white" : "border-silver bg-white text-muted")}>{done ? "✓" : current ? "●" : i}</div>
+              <div className={clsx("flex-1", i === STAGES.length - 1 ? "h-0.5 bg-transparent" : done ? "h-0.5 bg-navy" : "border-t-2 border-dashed border-line")} />
             </div>
             <div className={clsx("mt-1.5 text-[11px] font-semibold", current ? "text-ink" : "text-muted")}>{STAGE_LABEL[s].slice(3)}</div>
             <div className={clsx("text-[9.5px] font-bold uppercase tracking-[0.08em]", ownerCls)}>{owner === "ITARANG" ? "iTarang" : owner === "ECOFY" ? "Ecofy" : "EPC"}</div>
+            {current && partyLabel && <span className={clsx("mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", pill)}>{partyLabel}</span>}
           </li>
         );
       })}
