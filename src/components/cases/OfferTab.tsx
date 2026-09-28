@@ -7,6 +7,7 @@ import { useEpcPartners, useFinanciers, fmtDateTime, inr, todayIso, type CaseSum
 import { useSession } from "@/components/shell/Shell";
 import { Card, Empty, Field } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
+import { FilePicker } from "@/components/ui/file-picker";
 
 type Assessment = { id: string; version: number; recommendationStatus: string; confirmedAt: string | null };
 type Quote = { id: string; version: number; status: string; provisional: boolean; provisionalReason: string | null; systemDesc: string; equipmentInr: number; installationInr: number; gstInr: number; totalInr: number; validUntil: string; notes: string | null; documentId: string; createdAt: string };
@@ -67,7 +68,7 @@ export function OfferTab({ c, onChange }: { c: CaseSummary; onChange: () => void
           <form onSubmit={uploadQuote} className="mb-3 grid grid-cols-3 gap-2 rounded-lg bg-page p-3">
             <Field label="EPC partner"><select className="input" required value={qf.epcPartnerId} onChange={(e) => setQf((x) => ({ ...x, epcPartnerId: e.target.value }))}><option value="">—</option>{(epcs.data?.data ?? []).filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
             <Field label="Answers assessment"><select className="input" value={qf.assessmentId || latestAssessment?.id || ""} onChange={(e) => setQf((x) => ({ ...x, assessmentId: e.target.value }))}>{(assessments.data?.data ?? []).map((a) => <option key={a.id} value={a.id}>v{a.version} · {a.recommendationStatus.replace(/_/g, " ").toLowerCase()}</option>)}</select></Field>
-            <Field label="Quote PDF"><input type="file" accept="application/pdf" className="text-[12px]" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} /></Field>
+            <Field label="Quote PDF"><FilePicker compact file={pdf} onChange={setPdf} accept="application/pdf" hint="PDF" label="Choose PDF" /></Field>
             <div className="col-span-3"><Field label="System description"><input className="input" required minLength={3} value={qf.systemDesc} onChange={(e) => setQf((x) => ({ ...x, systemDesc: e.target.value }))} /></Field></div>
             <Field label="Battery (kWh)"><input className="input mono" type="number" step="0.1" value={qf.batteryKwh} onChange={(e) => setQf((x) => ({ ...x, batteryKwh: e.target.value }))} /></Field>
             <Field label="Inverter (kVA)"><input className="input mono" type="number" step="0.1" value={qf.inverterKva} onChange={(e) => setQf((x) => ({ ...x, inverterKva: e.target.value }))} /></Field>

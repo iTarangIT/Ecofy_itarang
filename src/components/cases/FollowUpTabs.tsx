@@ -148,7 +148,11 @@ export function DocumentsTab({ c, onChange }: { c: CaseSummary; onChange: () => 
         <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg bg-page p-3">
           <Field label="Type"><select className="input" value={typeCode} onChange={(e) => setTypeCode(e.target.value)}>{(types.data?.data ?? []).filter((t) => t.code !== "EPC_QUOTE").map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select></Field>
           {typeCode === "CALL_RECORDING" && <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> Customer consented to recording (deleted after 60 days)</label>}
-          <input type="file" className="text-[12.5px]" disabled={busy || (typeCode === "CALL_RECORDING" && !consent)} onChange={upload} />
+          <label className={`btn btn-navy ${busy || (typeCode === "CALL_RECORDING" && !consent) ? "pointer-events-none opacity-50" : "cursor-pointer"}`}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+            {busy ? "Uploading…" : "Choose file & upload"}
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.mp3,.m4a,.wav" className="sr-only" disabled={busy || (typeCode === "CALL_RECORDING" && !consent)} onChange={upload} />
+          </label>
         </div>
       )}
       {(q.data?.data ?? []).length === 0 && <Empty>No documents.</Empty>}

@@ -25,7 +25,7 @@ export function FilePicker({ file, onChange, accept = ".xlsx,.csv", hint = "Exce
       </label>
       {file ? (
         <div className="flex min-w-0 items-center gap-2 text-[13px]">
-          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ecofy text-[10px] font-bold text-white" aria-hidden>{file.name.toLowerCase().endsWith(".csv") ? "CSV" : "XLS"}</span>
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ecofy text-[10px] font-bold text-white" aria-hidden>{(file.name.split(".").pop() ?? "").slice(0, 4).toUpperCase() || "FILE"}</span>
           <span className="truncate font-medium text-ink" title={file.name}>{file.name}</span>
           <span className="shrink-0 text-muted">· {kb}</span>
           <button type="button" className="shrink-0 text-[12px] text-muted underline hover:text-bad" onClick={() => pick(null)}>Remove</button>
