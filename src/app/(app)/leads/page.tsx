@@ -10,12 +10,13 @@ import { NewLeadModal } from "@/components/cases/NewLeadModal";
 import { STAGES } from "@/components/ui/primitives";
 import { useUsers, type CaseSummary } from "@/lib/hooks";
 import { isAdmin } from "@/core/auth/rbac";
+import { toast } from "@/components/ui/toast";
 
 type BulkPushResult = { pushed: number; skipped: Array<{ caseId: string; code: string; gate: string | null; message: string }> };
 
 /** Why a selected lead was not pushed, in the words of the gate (FR-04.3). */
 function skipReason(s: BulkPushResult["skipped"][number]) {
-  if (s.gate === "temperature_warm") return "not Warm (Hot leads move on their own; set Cold leads to Warm first)";
+  if (s.gate === "temperature_warm") return "not Warm (tick “mark as Warm” in the push popup, or set the temperature on the case)";
   if (s.gate === "stage") return "already past S0";
   if (s.code === "NOT_FOUND") return "not visible to you";
   return s.message;
@@ -42,9 +43,12 @@ export default function LeadsPage() {
   const allPushableSelected = pushable.length > 0 && pushable.every((c) => selected.has(c.id));
   const toggle = (id: string) => setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const toggleAll = () => setSelected(allPushableSelected ? new Set() : new Set(pushable.map((c) => c.id)));
+  const [markWarm, setMarkWarm] = useState(true);
+  const selectedRows = rows.filter((c) => selected.has(c.id));
+  const needWarm = selectedRows.filter((c) => c.temperature !== "WARM").length;
   const bulkPush = useMutation({
-    mutationFn: () => post<BulkPushResult>("/cases/bulk-push", { caseIds: [...selected] }),
-    onSuccess: (r) => { setPushResult(r.data); setSelected(new Set()); void qc.invalidateQueries({ queryKey: ["cases"] }); },
+    mutationFn: () => post<BulkPushResult>("/cases/bulk-push", { caseIds: [...selected], markWarm }),
+    onSuccess: (r) => { setPushResult(r.data); toast(`Pushed ${r.data.pushed} lead${r.data.pushed === 1 ? "" : "s"} to iTarang${r.data.skipped.length ? ` · ${r.data.skipped.length} skipped` : ""}`, r.data.skipped.length ? "warn" : undefined); window.scrollTo({ top: 0, behavior: "smooth" }); setSelected(new Set()); void qc.invalidateQueries({ queryKey: ["cases"] }); },
   });
   const caseNo = (id: string) => rows.find((c) => c.id === id)?.caseNo ?? id;
 
@@ -64,11 +68,22 @@ export default function LeadsPage() {
           <label className="flex items-center gap-1 text-[12px]"><input type="checkbox" onChange={(e) => setQ((x) => ({ ...x, overdue: e.target.checked ? "true" : "" }))} /> Overdue follow-up</label>
         </div>
         {canPush && selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-sky/5 px-4 py-2 text-[12.5px]">
-            <span><b>{selected.size}</b> selected</span>
-            <button className="btn btn-sm btn-primary" type="button" disabled={bulkPush.isPending} onClick={() => bulkPush.mutate()}>{bulkPush.isPending ? "Pushing…" : "Push selected to iTarang"}</button>
-            <button className="btn btn-sm" type="button" onClick={() => setSelected(new Set())}>Clear</button>
-            <span className="text-muted">Only Warm leads at S0 are pushed; the rest are reported.</span>
+          <div role="dialog" aria-label="Push selected leads to iTarang" className="fixed bottom-6 left-[236px] right-4 z-40 mx-auto max-w-2xl rounded-2xl border border-line bg-white p-4 shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[14px] font-semibold">Push {selected.size} lead{selected.size === 1 ? "" : "s"} to iTarang</div>
+              <button className="text-[12px] text-muted underline" type="button" onClick={() => setSelected(new Set())}>Clear selection</button>
+            </div>
+            <div className="mt-1 truncate text-[12px] text-muted mono">{selectedRows.map((c) => c.caseNo).join(", ")}</div>
+            {needWarm > 0 && (
+              <label className="mt-3 flex items-start gap-2 text-[12.5px]">
+                <input type="checkbox" className="mt-0.5" checked={markWarm} onChange={(e) => setMarkWarm(e.target.checked)} />
+                <span>Mark {needWarm} lead{needWarm === 1 ? "" : "s"} without a temperature (or Cold) as <b>Warm</b> before pushing. Only Warm leads can be pushed.</span>
+              </label>
+            )}
+            <div className="mt-3 flex justify-end gap-2">
+              <button className="btn btn-sm" type="button" onClick={() => setSelected(new Set())}>Cancel</button>
+              <button className="btn btn-sm btn-primary" type="button" disabled={bulkPush.isPending} onClick={() => bulkPush.mutate()}>{bulkPush.isPending ? "Pushing…" : "Push selected to iTarang"}</button>
+            </div>
           </div>
         )}
         {bulkPush.isError && <div className="px-4 py-2"><Banner kind="red">Bulk push failed: {(bulkPush.error as Error).message}</Banner></div>}

@@ -98,6 +98,10 @@ export function registerAllRoutes() {
   registerRoute("/assets/:assetId", () => import("@/app/api/v1/assets/[assetId]/route"));
   registerRoute("/assets/:assetId/emi-status", () => import("@/app/api/v1/assets/[assetId]/emi-status/route"));
   registerRoute("/assets/:assetId/events", () => import("@/app/api/v1/assets/[assetId]/events/route"));
+  registerRoute("/emi-tracker", () => import("@/app/api/v1/emi-tracker/route"));
+  registerRoute("/emi-tracker/export.csv", () => import("@/app/api/v1/emi-tracker/export.csv/route"));
+  registerRoute("/emi-tracker/template.csv", () => import("@/app/api/v1/emi-tracker/template.csv/route"));
+  registerRoute("/emi-tracker/upload", () => import("@/app/api/v1/emi-tracker/upload/route"));
   registerRoute("/cases/:caseId/withdrawals", () => import("@/app/api/v1/cases/[caseId]/withdrawals/route"));
   registerRoute("/withdrawals/:withdrawalId/confirm", () => import("@/app/api/v1/withdrawals/[withdrawalId]/confirm/route"));
   registerRoute("/withdrawals/:withdrawalId/reject", () => import("@/app/api/v1/withdrawals/[withdrawalId]/reject/route"));

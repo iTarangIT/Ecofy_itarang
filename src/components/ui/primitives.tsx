@@ -65,19 +65,22 @@ export function OwnerBadge({ owner }: { owner: "ECOFY" | "ITARANG" | "EPC" }) {
 
 /**
  * The stage rail: S0 → S8 with owner colours (prototype pattern). `tone`
- * colours the current node by whose turn it is (indigo = the viewer acts,
- * amber = waiting on another party, navy = done) and `partyLabel` is pinned
+ * colours the current node by whose turn it is (brand blue gradient = the viewer acts,
+ * amber = waiting on another party, brand gradient = done) and `partyLabel` is pinned
  * under it ("You are here" / "Pending: iTarang"), so the current step is
  * never in doubt. The connector is solid up to the current node, dashed after.
  */
 export function StageRail({ stage, tone = "action", partyLabel }: { stage: string; tone?: "action" | "waiting" | "done"; partyLabel?: string }) {
   const idx = stage === "CLOSED" ? STAGES.length : STAGES.indexOf(stage);
+  // Brand gradient — same token as the CRM profile hero band (--gradient-primary).
+  const brandNode = "border-transparent bg-[image:var(--gradient-primary)] text-white ring-4 ring-sky-soft shadow-md shadow-sky/30";
+  const brandPill = "bg-[image:var(--gradient-primary)] text-white shadow-sm shadow-sky/30";
   const node = {
-    action: "border-transparent bg-gradient-to-br from-indigo-600 to-violet-600 text-white ring-4 ring-indigo-100",
+    action: brandNode,
     waiting: "border-transparent bg-warn text-white ring-4 ring-warn-soft",
-    done: "border-navy bg-navy text-white ring-4 ring-chip",
+    done: brandNode,
   }[tone];
-  const pill = { action: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white", waiting: "bg-warn text-white", done: "bg-navy text-white" }[tone];
+  const pill = { action: brandPill, waiting: "bg-warn text-white", done: brandPill }[tone];
   return (
     <ol className="flex items-start gap-0 overflow-x-auto py-1">
       {STAGES.map((s, i) => {
