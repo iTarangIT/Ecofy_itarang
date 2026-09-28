@@ -110,6 +110,30 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   );
 }
 
+const DEFAULT_TIME = "10:00";
+
+/**
+ * Date + time as two native inputs, held as ONE `YYYY-MM-DDTHH:mm` string (what the forms already convert with
+ * `new Date(v).toISOString()`). Not `datetime-local`: picking a date from its calendar leaves the time empty, so the
+ * value stays "" and the submit silently does nothing. Here a chosen date fills a default time at once, the time is
+ * changed freely, and the line below says what will be saved. No min / max: any date and time may be chosen.
+ */
+export function DateTimeField({ label, value, onChange, required, hint }: { label: string; value: string; onChange: (next: string) => void; required?: boolean; hint?: string }) {
+  const [date, time] = value ? value.split("T") : ["", ""];
+  const d = value ? new Date(`${value}:00+05:30`) : null;
+  const preview = d && !Number.isNaN(d.getTime()) ? d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <div className="block">
+      <span className="label">{label}</span>
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <input className="input" type="date" value={date} required={required} aria-label={`${label} — date`} onChange={(e) => onChange(e.target.value ? `${e.target.value}T${time || DEFAULT_TIME}` : "")} />
+        <input className="input w-28" type="time" value={time} required={required} aria-label={`${label} — time`} onChange={(e) => onChange(date ? `${date}T${e.target.value || DEFAULT_TIME}` : "")} />
+      </div>
+      <span className="mt-1 block text-[11.5px] text-muted">{preview ? `Will be saved as ${preview} (IST)` : hint ?? "Pick a date; the time fills in and can be changed."}</span>
+    </div>
+  );
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">

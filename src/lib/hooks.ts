@@ -32,7 +32,7 @@ export type CaseSummary = {
   assignedUserId: string | null; assignedUserName: string | null; qualifiedBy: string | null; qualifiedByName: string | null; financierId: string | null; financierName: string | null;
   customer: { id: string; fullName: string; mobile: string | null; altMobile: string | null; email?: string | null; customerType: string; businessName: string | null; address?: string; city: string; state: string; pincode: string; preferredLanguage: string | null; propertyType: string | null; consentDate: string; consentSource: string } | null;
   productInterest: string | null; avgMonthlyBillInr: number | null; sanctionedLoadKw: number | null; existingBackup: string | null; preferredCallTime: string | null; ecofyLeadId: string | null;
-  stageEnteredAt: string; queueEnteredAt: string | null; firstCallAt: string | null; hotToFirstCallHours: number | null; closureReason: string | null; closureNote: string | null; closedAt: string | null; reopenCount: number; previousCaseId: string | null;
+  stageEnteredAt: string; queueEnteredAt: string | null; firstCallAt: string | null; hotToFirstCallHours: number | null; closureReason: string | null; closureNote: string | null; closedAt: string | null; reopenCount: number; previousCaseId: string | null; hasFile: boolean;
   ageing: { inStageWorkingHours: number; openWorkingHours: number }; createdAt: string; updatedAt: string;
 };
 

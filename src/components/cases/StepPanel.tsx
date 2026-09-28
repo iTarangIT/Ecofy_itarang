@@ -7,6 +7,7 @@ import { useList, useUsers, useFinanciers, type CaseSummary } from "@/lib/hooks"
 import { useSession } from "@/components/shell/Shell";
 import { Field } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
+import { NewLeadModal } from "@/components/cases/NewLeadModal";
 
 /**
  * The action panel for the case's current stage, driven by stage × role × sub-status (BRD §4.2).
@@ -23,6 +24,7 @@ export function StepPanel({ c, onChange }: { c: CaseSummary; onChange: () => voi
   const [reason, setReason] = useState("");
   const [assignee, setAssignee] = useState("");
   const [financier, setFinancier] = useState("");
+  const [linkedOpen, setLinkedOpen] = useState(false);
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setBusy(true);
@@ -34,14 +36,35 @@ export function StepPanel({ c, onChange }: { c: CaseSummary; onChange: () => voi
   const readonly = (who: string) => <p className="rounded-lg bg-[#f7f9fa] p-3 text-[12.5px] text-muted">Read-only for your role at this stage — {who} executes this step.</p>;
 
   if (c.stage === "CLOSED") {
+    // CONFLICTS #29: Ecofy reworks a case iTarang closed. A case that reached a File never reopens (database
+    // trigger); the customer gets a new case instead, which intake links to this one (FR-03.6 / FR-14.7).
+    const canReopen = ecofy || role === "ITARANG_ADMIN";
+    const cu = c.customer;
     return (
       <div className="space-y-3">
-        <p className="text-[12.5px] text-muted">The case is closed ({c.closureReason}). {role === "ITARANG_ADMIN" ? "iTarang Admin can reopen a case that never reached a File." : ""}</p>
-        {role === "ITARANG_ADMIN" && (
+        <p className="text-[12.5px] text-muted">
+          The case is closed ({c.closureReason}).{" "}
+          {canReopen ? (c.hasFile ? "It reached a File, so it cannot reopen — start a new linked case for the customer instead." : "It can be reopened; it returns to S0 with Ecofy.") : ""}
+        </p>
+        {canReopen && !c.hasFile && (
           <div className="flex items-end gap-2">
             <Field label="Reopen reason"><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
             <button className="btn" disabled={busy || reason.length < 3} type="button" onClick={() => run("Case reopened at S0", () => post(`/cases/${c.id}/reopen`, { reason }, { ifMatch: c.version }))}>Reopen</button>
           </div>
+        )}
+        {canReopen && c.hasFile && (
+          <>
+            <button className="btn btn-primary" type="button" onClick={() => setLinkedOpen(true)}>Start a new linked case</button>
+            <NewLeadModal
+              open={linkedOpen}
+              onClose={() => setLinkedOpen(false)}
+              initial={cu ? {
+                fullName: cu.fullName, mobile: (cu.mobile ?? "").replace(/^\+91/, ""), altMobile: (cu.altMobile ?? "").replace(/^\+91/, ""), email: cu.email ?? "",
+                customerType: cu.customerType, businessName: cu.businessName ?? "", address: cu.address ?? "", city: cu.city, state: cu.state, pincode: cu.pincode,
+                preferredLanguage: cu.preferredLanguage ?? "", propertyType: cu.propertyType ?? "", segment: c.segment, productInterest: c.productInterest ?? "",
+              } : undefined}
+            />
+          </>
         )}
       </div>
     );

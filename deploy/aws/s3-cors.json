@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://sandbox-ecofy.itarang.com"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type", "Content-Length", "x-amz-server-side-encryption"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 300
+  }
+]

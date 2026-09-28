@@ -81,6 +81,12 @@ Files written by the dev storage/mail/SMS drivers live in `/srv/ecofy/shared/dat
 is a symlink to it). Dev mail and SMS with OTPs are files there, not real messages, until `MAIL_DRIVER=ses`
 and `SMS_DRIVER=gupshup` are configured.
 
+## 7. S3 object storage
+Staging stores documents in the private bucket `itarang-ecofy-staging` (ap-south-1). Bucket CORS, the
+bucket policy, the least-privilege IAM user and the env keys are in `deploy/aws/README.md`; the env values go
+into `STAGING_ENV_FILE` like everything else (`STORAGE_DRIVER=s3`, `S3_BUCKET`, `S3_PREFIX=ecofy/staging/`,
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). `/api/v1/health` shows `checks.s3`.
+
 ## Changing the environment
 Edit the `STAGING_ENV_FILE` secret and re-run the workflow (Actions → staging → Run workflow). Nothing on
 the server has to be edited by hand.

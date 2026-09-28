@@ -9,11 +9,11 @@ import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/shell/Shell";
 
 /** FR-03.8: EU creates at S0 with a consent tick; IA creates an iTarang-sourced lead at S1. */
-export function NewLeadModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NewLeadModal({ open, onClose, initial }: { open: boolean; onClose: () => void; /** Pre-filled fields, e.g. a new linked case for a closed case's customer. */ initial?: Record<string, string> }) {
   const s = useSession();
   const router = useRouter();
   const lists = { consent: useList("consent_source"), lang: useList("language"), prop: useList("property_type"), pi: useList("product_interest"), backup: useList("existing_backup"), call: useList("call_time") };
-  const [f, setF] = useState<Record<string, string>>({ segment: "RESI", customerType: "INDIVIDUAL", consentSource: "CALL", consentDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()) });
+  const [f, setF] = useState<Record<string, string>>({ segment: "RESI", customerType: "INDIVIDUAL", consentSource: "CALL", consentDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()), ...(initial ?? {}) });
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -42,22 +42,22 @@ export function NewLeadModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal open={open} onClose={onClose} title={s.org === "ITARANG" ? "New iTarang-sourced lead (starts at S1)" : "New lead (starts at S0)"} wide>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-        <Field label="Customer name"><input className="input" required maxLength={100} onChange={set("fullName")} /></Field>
-        <Field label="Mobile (10 digits)"><input className="input mono" required pattern="[6-9][0-9]{9}" onChange={set("mobile")} /></Field>
+        <Field label="Customer name"><input className="input" required maxLength={100} defaultValue={f.fullName} onChange={set("fullName")} /></Field>
+        <Field label="Mobile (10 digits)"><input className="input mono" required pattern="[6-9][0-9]{9}" defaultValue={f.mobile} onChange={set("mobile")} /></Field>
         <Field label="Segment"><select className="input" value={f.segment} onChange={set("segment")}><option value="RESI">RESI</option><option value="ESS">ESS</option><option value="CI">C&amp;I</option></select></Field>
         <Field label="Customer type"><select className="input" value={f.customerType} onChange={set("customerType")}><option value="INDIVIDUAL">Individual</option><option value="BUSINESS">Business</option></select></Field>
-        {f.customerType === "BUSINESS" && <Field label="Business name"><input className="input" required onChange={set("businessName")} /></Field>}
-        <Field label="Pincode"><input className="input mono" required pattern="[1-9][0-9]{5}" onChange={set("pincode")} /></Field>
-        <Field label="City"><input className="input" required onChange={set("city")} /></Field>
-        <Field label="State"><input className="input" required onChange={set("state")} /></Field>
-        <div className="col-span-2"><Field label="Address"><input className="input" required maxLength={250} onChange={set("address")} /></Field></div>
+        {f.customerType === "BUSINESS" && <Field label="Business name"><input className="input" required defaultValue={f.businessName} onChange={set("businessName")} /></Field>}
+        <Field label="Pincode"><input className="input mono" required pattern="[1-9][0-9]{5}" defaultValue={f.pincode} onChange={set("pincode")} /></Field>
+        <Field label="City"><input className="input" required defaultValue={f.city} onChange={set("city")} /></Field>
+        <Field label="State"><input className="input" required defaultValue={f.state} onChange={set("state")} /></Field>
+        <div className="col-span-2"><Field label="Address"><input className="input" required maxLength={250} defaultValue={f.address} onChange={set("address")} /></Field></div>
         <Field label="Consent source"><select className="input" value={f.consentSource} onChange={set("consentSource")}>{opt(lists.consent)}</select></Field>
         <Field label="Consent date"><input className="input" type="date" value={f.consentDate} required onChange={set("consentDate")} /></Field>
-        <Field label="Alternate mobile"><input className="input mono" pattern="[6-9][0-9]{9}" onChange={set("altMobile")} /></Field>
-        <Field label="Email"><input className="input" type="email" onChange={set("email")} /></Field>
-        <Field label="Preferred language"><select className="input" onChange={set("preferredLanguage")}><option value="">—</option>{opt(lists.lang)}</select></Field>
-        <Field label="Property type"><select className="input" onChange={set("propertyType")}><option value="">—</option>{opt(lists.prop)}</select></Field>
-        <Field label="Product interest"><select className="input" onChange={set("productInterest")}><option value="">—</option>{opt(lists.pi)}</select></Field>
+        <Field label="Alternate mobile"><input className="input mono" pattern="[6-9][0-9]{9}" defaultValue={f.altMobile} onChange={set("altMobile")} /></Field>
+        <Field label="Email"><input className="input" type="email" defaultValue={f.email} onChange={set("email")} /></Field>
+        <Field label="Preferred language"><select className="input" defaultValue={f.preferredLanguage} onChange={set("preferredLanguage")}><option value="">—</option>{opt(lists.lang)}</select></Field>
+        <Field label="Property type"><select className="input" defaultValue={f.propertyType} onChange={set("propertyType")}><option value="">—</option>{opt(lists.prop)}</select></Field>
+        <Field label="Product interest"><select className="input" defaultValue={f.productInterest} onChange={set("productInterest")}><option value="">—</option>{opt(lists.pi)}</select></Field>
         <Field label="Existing backup"><select className="input" onChange={set("existingBackup")}><option value="">—</option>{opt(lists.backup)}</select></Field>
         <Field label="Avg monthly bill (₹)"><input className="input mono" type="number" min={0} onChange={set("avgMonthlyBillInr")} /></Field>
         <Field label="Sanctioned load (kW)"><input className="input mono" type="number" min={0} step="0.1" onChange={set("sanctionedLoadKw")} /></Field>
