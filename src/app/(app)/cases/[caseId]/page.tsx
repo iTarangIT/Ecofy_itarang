@@ -6,8 +6,8 @@ import Link from "next/link";
 import { get, ApiError, errorMessage } from "@/lib/api";
 import { useCase, fmtDateTime, inr } from "@/lib/hooks";
 import { useSession } from "@/components/shell/Shell";
-import { Card, Hours, SegPill, StageChip, StageRail, TempChip, OwnerBadge, STAGE_OWNER, Empty } from "@/components/ui/primitives";
-import { StepPanel } from "@/components/cases/StepPanel";
+import { Card, SegPill, StageChip, TempChip, Empty } from "@/components/ui/primitives";
+import { CurrentStepCard } from "@/components/cases/CurrentStepCard";
 import { ActivitiesTab, AppointmentsTab, DocumentsTab } from "@/components/cases/FollowUpTabs";
 import { AssessmentTab } from "@/components/cases/AssessmentTab";
 import { OfferTab } from "@/components/cases/OfferTab";
@@ -16,7 +16,24 @@ import { InstallationTab } from "@/components/cases/InstallationTab";
 import { WithdrawalTab } from "@/components/cases/WithdrawalTab";
 
 type TimelineItem = { at: string; kind: string; title: string; detail?: Record<string, unknown>; actor: { fullName: string; role: string | null } | null };
-const TABS = ["Current step", "Timeline", "Activities", "Appointments", "Assessment", "Offer", "Financing", "Installation", "Documents", "Withdrawal"] as const;
+// History and full views. The current step is not a tab — it is the card above.
+const TABS = ["Timeline", "Activities", "Appointments", "Assessment", "Offer", "Financing", "Installation", "Documents", "Withdrawal"] as const;
+
+const KIND_CHIP: Array<[RegExp, string, string]> = [
+  [/^stage/, "stage", "bg-navy text-white"],
+  [/^activity/, "activity", "bg-chip text-teal"],
+  [/^appointment/, "meeting", "bg-sky-soft text-sky"],
+  [/^document/, "document", "bg-chip text-muted"],
+  [/^assessment/, "assessment", "bg-epc-soft text-epc"],
+  [/^eligibility|^quote|^offer/, "offer", "bg-warn-soft text-warn"],
+  [/^file|^financing|^disbursement/, "financing", "bg-ecofy-soft text-ecofy"],
+  [/^installation/, "installation", "bg-epc-soft text-epc"],
+  [/^withdrawal/, "withdrawal", "bg-bad-soft text-bad"],
+];
+function kindChip(kind: string) {
+  const hit = KIND_CHIP.find(([re]) => re.test(kind));
+  return <span className={`chip ${hit?.[2] ?? "bg-chip text-muted"}`}>{hit?.[1] ?? kind}</span>;
+}
 
 /**
  * 404 from GET /cases/{id} means "not in your scope" (RLS hides out-of-scope rows, BRD §2.2):
@@ -50,13 +67,13 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
   const s = useSession();
   const qc = useQueryClient();
   const c = useCase(caseId);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Current step");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Timeline");
   const tl = useQuery({ queryKey: ["timeline", caseId], queryFn: () => get<TimelineItem[]>(`/cases/${caseId}/timeline`), enabled: tab === "Timeline" });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["case", caseId] }); qc.invalidateQueries({ queryKey: ["timeline", caseId] }); };
   if (c.isLoading) return <div className="text-muted">Loading case…</div>;
   if (c.error || !c.data) return <HiddenCase role={s.role} error={c.error} />;
   const k = c.data.data;
-  const owner = STAGE_OWNER[k.stage];
+  const timeline = (tl.data?.data ?? []).slice().reverse(); // the API is oldest-first; the reader wants the latest at the top
 
   return (
     <div className="space-y-4">
@@ -69,23 +86,26 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
         <span className="mono text-[12px] text-muted">{k.caseNo}</span>
         {k.previousCaseId && <a className="text-[12px] text-sky" href={`/cases/${k.previousCaseId}`}>linked to previous case</a>}
       </div>
-      <Card title="Case timeline" right={<span className="flex items-center gap-2">In stage <Hours h={k.ageing.inStageWorkingHours} /> · open <Hours h={k.ageing.openWorkingHours} /></span>}>
-        <StageRail stage={k.stage} />
-        {k.stage === "CLOSED" && <div className="banner banner-amber mt-3">Closed: {k.closureReason} {k.closureNote ? `— ${k.closureNote}` : ""} on {fmtDateTime(k.closedAt)}</div>}
-      </Card>
+
+      <CurrentStepCard c={k} onChange={refresh} />
+
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1" aria-label="History">
             {TABS.map((t) => <button key={t} type="button" className={`btn btn-sm ${tab === t ? "btn-navy" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
           </div>
-          {tab === "Current step" && <Card title={<span className="flex items-center gap-2">Current step <OwnerBadge owner={owner} /></span>}><StepPanel c={k} onChange={refresh} /></Card>}
           {tab === "Timeline" && (
-            <Card title="Timeline" pad={false}>
-              {(tl.data?.data ?? []).length === 0 && <Empty>Nothing yet.</Empty>}
-              {(tl.data?.data ?? []).map((i, idx) => (
+            <Card title="Timeline" right="everything recorded on the case · newest first" pad={false}>
+              {tl.isLoading && <Empty>Loading…</Empty>}
+              {!tl.isLoading && timeline.length === 0 && <Empty>Nothing yet.</Empty>}
+              {timeline.map((i, idx) => (
                 <div key={idx} className="grid grid-cols-[130px_1fr] gap-3 border-b border-line px-4 py-2 text-[12.5px]">
                   <div className="mono text-[11.5px] text-muted">{fmtDateTime(i.at)}</div>
-                  <div><div className="font-semibold">{i.title}</div>{i.detail && Object.values(i.detail).some(Boolean) && <div className="text-muted">{Object.entries(i.detail).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([kk, v]) => `${kk}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ")}</div>}<div className="text-[11px] text-muted">by {i.actor?.fullName ?? "Platform"}</div></div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">{kindChip(i.kind)}<span className="font-semibold">{i.title}</span></div>
+                    {i.detail && Object.values(i.detail).some(Boolean) && <div className="text-muted">{Object.entries(i.detail).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([kk, v]) => `${kk}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ")}</div>}
+                    <div className="text-[11px] text-muted">by {i.actor?.fullName ?? "Platform"}</div>
+                  </div>
                 </div>
               ))}
             </Card>
@@ -122,7 +142,6 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
               <dt>Ecofy lead id</dt><dd className="mono">{k.ecofyLeadId ?? "—"}</dd>
               <dt>Qualified by</dt><dd>{k.qualifiedByName ?? "—"}</dd>
               <dt>Financier</dt><dd>{k.financierName ?? "—"}</dd>
-              <dt>Hot → first call</dt><dd><Hours h={k.hotToFirstCallHours} /></dd>
               <dt>Created</dt><dd>{fmtDateTime(k.createdAt)}</dd>
             </dl>
           </Card>

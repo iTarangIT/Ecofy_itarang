@@ -112,9 +112,14 @@ async function assertFinancierRole(ctx: RequestContext, c: { tenantId: string; f
 }
 
 export async function recordDownPayment(ctx: RequestContext, caseId: string, input: z.infer<typeof DownPayment>) {
-  const c = await requireCase(ctx, caseId);
+  // lockCase (not requireCase): serialises a double-click so the existence check below cannot race.
+  const c = await lockCase(ctx, caseId, null);
   if (!["S6", "S7"].includes(c.stage)) throw errors.gate("stage", "Down payment is recorded at S6 or S7");
   const fin = await assertFinancierRole(ctx, c);
+  // One down payment per case (the sanction already carries the single agreed amount). The row is visible here
+  // because assertFinancierRole just proved the caller's role is the one RLS lets see it.
+  const existing = (await ctx.tx.select({ receivedOn: schema.downPayments.receivedOn, amountInr: schema.downPayments.amountInr }).from(schema.downPayments).where(eq(schema.downPayments.caseId, c.id)).limit(1))[0];
+  if (existing) throw errors.validation(`Down payment already recorded on ${existing.receivedOn} (₹${existing.amountInr.toLocaleString("en-IN")}). It cannot be recorded twice.`, { receivedOn: existing.receivedOn, amountInr: existing.amountInr });
   const row = (await ctx.tx.insert(schema.downPayments).values({ tenantId: c.tenantId, caseId: c.id, visibleTo: fin.valuesVisibleTo as Role, receivedOn: input.receivedOn, amountInr: input.amountInr, reference: input.reference ?? null, recordedBy: ctx.auth.userId, recordedAt: ctx.now }).returning())[0];
   await audit(ctx, { action: "downpayment.record", entityType: "down_payment", entityId: row.id, caseId: c.id, after: { receivedOn: input.receivedOn } });
   await emit(ctx, "downpayment.recorded", row.id, { caseId: c.id, notify: [{ role: "ITARANG_ADMIN", type: "downpayment.recorded", title: `${c.caseNo}: down payment received (status)`, caseId: c.id }] });
