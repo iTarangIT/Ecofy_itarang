@@ -35,6 +35,31 @@ function kindChip(kind: string) {
   return <span className={`chip ${hit?.[2] ?? "bg-chip text-muted"}`}>{hit?.[1] ?? kind}</span>;
 }
 
+/** Who actually acted — from the actor's role (ITARANG_* vs ECOFY_*), never from where the row was logged. */
+type Party = "iTarang" | "Ecofy" | "Platform";
+function partyOf(i: TimelineItem): Party {
+  const role = i.actor?.role ?? "";
+  return role.startsWith("ITARANG") ? "iTarang" : role.startsWith("ECOFY") ? "Ecofy" : "Platform";
+}
+const PARTY_CHIP: Record<Party, string> = { iTarang: "bg-sky-soft text-sky", Ecofy: "bg-ecofy-soft text-ecofy", Platform: "bg-chip text-muted" };
+
+const flatDetail = (d?: Record<string, unknown>) =>
+  d ? Object.entries(d).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ") : "";
+
+/** Timeline → CSV (Excel-friendly: BOM, CRLF, quoted cells) and trigger a download. */
+function downloadTimelineCsv(fileStem: string, items: TimelineItem[]) {
+  const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = ["When (IST)", "When (ISO)", "Party", "By", "Role", "Kind", "Event", "Details"];
+  const rows = items.map((i) => [fmtDateTime(i.at), i.at, partyOf(i), i.actor?.fullName ?? "Platform", i.actor?.role ?? "", i.kind, i.title, flatDetail(i.detail)]);
+  const csv = "\uFEFF" + [head, ...rows].map((r) => r.map(q).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileStem}-timeline.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * 404 from GET /cases/{id} means "not in your scope" (RLS hides out-of-scope rows, BRD §2.2):
  * workers see cases assigned to them or qualified by them; Ecofy Admin sees a case only while Ecofy is
@@ -95,15 +120,30 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
             {TABS.map((t) => <button key={t} type="button" className={`btn btn-sm ${tab === t ? "btn-navy" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
           </div>
           {tab === "Timeline" && (
-            <Card title="Timeline" right="everything recorded on the case · newest first" pad={false}>
+            <Card
+              title="Timeline"
+              right={
+                <span className="flex items-center gap-3">
+                  <span>everything recorded on the case · newest first</span>
+                  <button type="button" className="btn btn-sm" disabled={tl.isLoading || timeline.length === 0} onClick={() => downloadTimelineCsv(k.caseNo || caseId, timeline)}>
+                    ⤓ Download CSV
+                  </button>
+                </span>
+              }
+              pad={false}
+            >
               {tl.isLoading && <Empty>Loading…</Empty>}
               {!tl.isLoading && timeline.length === 0 && <Empty>Nothing yet.</Empty>}
               {timeline.map((i, idx) => (
                 <div key={idx} className="grid grid-cols-[130px_1fr] gap-3 border-b border-line px-4 py-2 text-[12.5px]">
                   <div className="mono text-[11.5px] text-muted">{fmtDateTime(i.at)}</div>
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">{kindChip(i.kind)}<span className="font-semibold">{i.title}</span></div>
-                    {i.detail && Object.values(i.detail).some(Boolean) && <div className="text-muted">{Object.entries(i.detail).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([kk, v]) => `${kk}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ")}</div>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`chip ${PARTY_CHIP[partyOf(i)]}`}>{partyOf(i)}</span>
+                      {kindChip(i.kind)}
+                      <span className="font-semibold">{i.title}</span>
+                    </div>
+                    {i.detail && Object.values(i.detail).some(Boolean) && <div className="text-muted">{flatDetail(i.detail)}</div>}
                     <div className="text-[11px] text-muted">by {i.actor?.fullName ?? "Platform"}</div>
                   </div>
                 </div>

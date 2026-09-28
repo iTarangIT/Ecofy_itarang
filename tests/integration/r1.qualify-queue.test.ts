@@ -89,6 +89,15 @@ describe("R1 — access, qualification, queue, follow-up", () => {
     expect((await ia.post("/cases/bulk-push", { caseIds: [cold.id] })).status).toBe(403);
   });
 
+  it("bulk push with markWarm (CONFLICTS #30): untagged S0 leads are set Warm, then pushed", async () => {
+    const untagged = await createLead(eu);
+    const r = expectOk<{ pushed: number; skipped: unknown[] }>(await eu.post("/cases/bulk-push", { caseIds: [untagged.id], markWarm: true }));
+    expect(r).toEqual({ pushed: 1, skipped: [] });
+    const after = expectOk<{ stage: string; temperature: string | null }>(await eu.get(`/cases/${untagged.id}`));
+    expect(after.stage).toBe("S1");
+    expect(after.temperature).toBe("WARM");
+  });
+
   it("queue order: Hot first, then Warm by push time", async () => {
     await resetTestData(t.tenantId);
     const w = await createLead(eu);

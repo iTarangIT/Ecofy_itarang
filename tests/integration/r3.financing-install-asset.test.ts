@@ -169,6 +169,33 @@ describe("R3 — financing, installation, disbursement, asset, withdrawal, dashb
     expect(asset.emiStatus.state).toBe("DPD_1_30");
     expect(asset.events.length).toBe(2);
     expect(JSON.stringify(asset)).not.toMatch(/risk|soh|telemetry/i);
+    // CONFLICTS #32: EMI tracker — filters, bulk upload (EA only, per-row savepoints, same-day replace), CSV download
+    type TrackerRow = { assetId: string; caseNo: string; fileNo: string | null; emi: { asOf: string; state: string; note: string | null } | null; previous: { state: string } | null; updates: number };
+    const tracked = expectOk<TrackerRow[]>(await ea.get("/emi-tracker?state=DPD_1_30"));
+    expect(tracked.find((x) => x.assetId === a.id)).toMatchObject({ caseNo: f.caseNo, fileNo: f.fileNo, emi: { asOf: "2026-10-05", state: "DPD_1_30" }, updates: 1 });
+    expect(expectOk<TrackerRow[]>(await ea.get("/emi-tracker?state=CURRENT,CLOSED")).some((x) => x.assetId === a.id)).toBe(false);
+    expect(expectOk<TrackerRow[]>(await ia.get(`/emi-tracker?q=${f.caseNo}`)).some((x) => x.assetId === a.id)).toBe(true); // IA reads the tracker too
+    const sheet = ["case_no,file_no,as_of,state,note", `${f.caseNo},,2026-11-05,DPD 31-60,two EMIs missed`, `,${f.fileNo},05-10-2026,current,corrected`, "ECF-999999,,2026-11-05,CURRENT,", `${f.caseNo},,2026-11-06,PAUSED,`, `${f.caseNo},,not-a-date,CURRENT,`].join("\n");
+    const contentBase64 = Buffer.from(sheet, "utf8").toString("base64");
+    expect((await ia.post("/emi-tracker/upload", { fileName: "emi.csv", contentBase64 })).status).toBe(403);
+    const up = expectOk<{ total: number; applied: number; failed: number; errors: Array<{ row: number; code: string }> }>(await ea.post("/emi-tracker/upload", { fileName: "emi.csv", contentBase64 }));
+    expect(up).toMatchObject({ total: 5, applied: 2, failed: 3 });
+    expect(up.errors.map((e) => [e.row, e.code])).toEqual([[4, "NOT_FOUND"], [5, "BAD_STATE"], [6, "BAD_DATE"]]);
+    const after = expectOk<TrackerRow[]>(await ea.get(`/emi-tracker?q=${f.fileNo}`)).find((x) => x.assetId === a.id)!;
+    expect(after.emi).toMatchObject({ asOf: "2026-11-05", state: "DPD_31_60", note: "two EMIs missed" });
+    expect(after.previous?.state).toBe("CURRENT"); // 2026-10-05 was replaced in place (DPD_1_30 → CURRENT), not duplicated
+    expect(after.updates).toBe(2);
+    expect(expectOk<{ emiHistory: Array<{ asOf: string; state: string }> }>(await ea.get(`/assets/${a.id}`)).emiHistory).toEqual([expect.objectContaining({ asOf: "2026-11-05", state: "DPD_31_60" }), expect.objectContaining({ asOf: "2026-10-05", state: "CURRENT" })]);
+    const csv = await ea.get(`/emi-tracker/export.csv?q=${f.caseNo}`);
+    expect(csv.status).toBe(200);
+    expect(csv.headers.get("content-type")).toContain("text/csv");
+    expect(csv.raw).toContain("case_no,file_no,customer,city,system,commissioned_on,lifecycle,as_of,state,note,recorded_at,previous_as_of,previous_state,updates");
+    expect(csv.raw).toContain(`${f.caseNo},${f.fileNo},`);
+    expect(csv.raw).toContain(",2026-11-05,DPD_31_60,two EMIs missed,");
+    const hist = await ea.get(`/emi-tracker/export.csv?q=${f.caseNo}&scope=history`);
+    expect(hist.raw!.trim().split("\n").length).toBe(3); // header + 2 statuses
+    expect((await ea.get("/emi-tracker/template.csv")).raw).toContain("case_no,file_no,as_of,state,note");
+    expect(csv.raw + hist.raw!).not.toMatch(/200000|6500|risk/);
     // usage view counts, never blocks
     const usage = expectOk<Array<{ filesToDate: number; activeAssets: number; seatsByRole: Record<string, unknown> }>>(await ea.get("/usage"));
     expect(usage[0].filesToDate).toBeGreaterThan(0);

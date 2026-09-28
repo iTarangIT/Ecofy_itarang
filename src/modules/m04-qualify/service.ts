@@ -209,15 +209,22 @@ export async function pushToItarang(ctx: RequestContext, caseId: string, ifMatch
  * Bulk push (docs/CONFLICTS.md #26): every selected case goes through pushToItarang with the same gates
  * (S0, Warm, visible to the caller); one failure never blocks the others. Each pushed case fires its own
  * outbox event, so the iTarang CRM receives one `lead.pushed` per lead.
+ * `markWarm` (docs/CONFLICTS.md #30): an S0 lead with no temperature or Cold is first set to Warm through
+ * setTemperature (audited, `case.temperature_set`), then pushed.
  */
-export async function bulkPush(ctx: RequestContext, input: { caseIds: string[]; note?: string }) {
+export async function bulkPush(ctx: RequestContext, input: { caseIds: string[]; note?: string; markWarm?: boolean }) {
   let pushed = 0;
   const skipped: Array<{ caseId: string; code: string; gate: string | null; message: string }> = [];
   for (const id of input.caseIds) {
     try {
       // savepoint per case so one failure does not poison the transaction
       await ctx.tx.transaction(async (inner) => {
-        await pushToItarang({ ...ctx, tx: inner }, id, null, { note: input.note });
+        const ictx = { ...ctx, tx: inner };
+        if (input.markWarm) {
+          const c = await requireCase(ictx, id);
+          if (c.stage === "S0" && (c.temperature === null || c.temperature === "COLD")) await setTemperature(ictx, id, null, { temperature: "WARM" });
+        }
+        await pushToItarang(ictx, id, null, { note: input.note });
       });
       pushed++;
     } catch (e) {

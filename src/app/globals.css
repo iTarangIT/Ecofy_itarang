@@ -25,6 +25,8 @@
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --radius-card: 10px;
+  /* Brand gradient — mirrors the CRM's --gradient-primary (profile hero band). */
+  --gradient-primary: linear-gradient(135deg, #2e68b2 0%, #138fc6 50%, #165e73 100%);
   --shadow-card: 0 1px 2px rgba(2, 49, 78, 0.06), 0 4px 14px rgba(2, 49, 78, 0.06);
 }
 

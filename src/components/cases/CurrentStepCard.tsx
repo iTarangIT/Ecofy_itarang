@@ -12,7 +12,7 @@ import { get } from "@/lib/api";
 import { fmtDateTime, type CaseSummary } from "@/lib/hooks";
 import { railLabel, stepBrief, type StepBrief, type StepFacts, type StepTone } from "@/lib/stepBrief";
 import { useSession } from "@/components/shell/Shell";
-import { Hours, StageRail } from "@/components/ui/primitives";
+import { StageRail } from "@/components/ui/primitives";
 import { AssessmentCard, NewAssessmentForm, type Assessment } from "./AssessmentTab";
 import { EligibilityDecisionInline } from "./EligibilityDecisionInline";
 import { DisbursementForm, DownPaymentForm, DownPaymentList, FinancingDecisionForm, ReacceptancePanel, isOpenDecision, type Decision, type PaymentStatus } from "./FinancingTab";
@@ -27,10 +27,14 @@ type Otp = { challengeId: string };
 
 const STAGE_LABEL: Record<string, string> = { S0: "Qualification", S1: "Pickup queue", S2: "Follow-up", S3: "Assessment", S4: "Offer", S5: "File", S6: "Financing", S7: "Installation", S8: "Asset", CLOSED: "Closed" };
 
+// Brand gradient — same token as the CRM profile hero band (--gradient-primary).
+const BRAND_GRADIENT = "bg-[image:var(--gradient-primary)]";
+const BRAND_TONE = { card: "border-sky-soft from-sky-soft/70", bar: BRAND_GRADIENT, pill: `${BRAND_GRADIENT} text-white shadow-md shadow-sky/30 ring-1 ring-navy/20` };
+
 const TONE: Record<StepTone, { card: string; bar: string; pill: string }> = {
-  action: { card: "border-indigo-200 from-indigo-50/80", bar: "bg-gradient-to-b from-indigo-500 to-violet-500", pill: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm" },
+  action: BRAND_TONE,
   waiting: { card: "border-[#f0dcaf] from-warn-soft", bar: "bg-warn", pill: "bg-warn text-white" },
-  done: { card: "border-line from-page", bar: "bg-silver", pill: "bg-navy text-white" },
+  done: BRAND_TONE,
 };
 
 export function CurrentStepCard({ c, onChange }: P) {
@@ -85,9 +89,7 @@ export function CurrentStepCard({ c, onChange }: P) {
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.06em] ${t.pill}`}>{brief.partyLabel}</span>
             <span className="text-[13px]"><b>{st}</b> · {STAGE_LABEL[st] ?? st}{c.subStatus ? <span className="text-muted"> · {c.subStatus.replace(/_/g, " ").toLowerCase()}</span> : null}</span>
-          </div>
-          <span className="flex items-center gap-2 text-[12px] text-muted">In stage <Hours h={c.ageing.inStageWorkingHours} /> · open <Hours h={c.ageing.openWorkingHours} /></span>
-        </header>
+          </div>        </header>
 
         <StageRail stage={st} tone={brief.tone} partyLabel={railLabel(brief)} />
 
@@ -97,7 +99,7 @@ export function CurrentStepCard({ c, onChange }: P) {
           <h3 className="text-[15px] font-bold text-ink">{brief.title}</h3>
           <p className="mt-0.5 text-[12.5px] text-ink/80">{brief.detail}</p>
           {brief.gate && <p className="mt-1 text-[12px] text-muted">{brief.gate}</p>}
-          <p className="mt-1 text-[12px] font-semibold text-indigo-700">Next → {brief.next}</p>
+          <p className="mt-1 text-[12px] font-semibold text-blue-800">Next → {brief.next}</p>
         </div>
 
         {/* ---- the one thing to do now ---- */}
