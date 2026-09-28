@@ -41,13 +41,13 @@ export const ROLE_LABEL: Record<Role, string> = {
 /** Permission codes returned by GET /me (drives navigation and action visibility in the UI). */
 export const PERMISSIONS: Record<Role, string[]> = {
   ECOFY_ADMIN: [
-    "leads.import", "cases.create", "cases.assign.s0", "cases.temperature", "cases.push", "cases.close",
+    "leads.import", "cases.create", "cases.assign.s0", "cases.temperature", "cases.push", "cases.close", "cases.reopen",
     "activities.comment", "calculator.run", "assessments.save", "eligibility.record", "amounts.view",
     "financing.record", "reacceptance.trigger", "installation.view", "payout.record", "asset.record",
     "calculator.approve", "settings.view", "users.manage.ecofy", "dashboards.all", "export", "audit.view", "usage.view",
   ],
   ECOFY_USER: [
-    "leads.import", "cases.create", "cases.temperature", "cases.push", "cases.close", "activities.log", "calculator.run",
+    "leads.import", "cases.create", "cases.temperature", "cases.push", "cases.close", "cases.reopen", "activities.log", "calculator.run",
     "assessments.save", "dashboards.own",
   ],
   ITARANG_ADMIN: [

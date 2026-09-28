@@ -105,7 +105,8 @@ is lower than the one you have.**
 ```
 
 `to` is `S0` when the lead went back to Ecofy (`reason` = return reason code), and `CLOSED` when it was closed
-(`reason` = closure reason). Changes the CRM caused are echoed back too; treat them as confirmations.
+(`reason` = closure reason). A reopen by Ecofy (CONFLICTS #29) arrives as `from: "CLOSED", to: "S0"` with the reopen
+reason. Changes the CRM caused are echoed back too; treat them as confirmations.
 
 ## 4. CRM → Ecofy
 

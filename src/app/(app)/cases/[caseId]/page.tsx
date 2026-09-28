@@ -66,8 +66,7 @@ export default function CasePage({ params }: { params: Promise<{ caseId: string 
         <SegPill segment={k.segment} />
         <TempChip temperature={k.temperature} />
         <StageChip stage={k.stage} subStatus={k.subStatus} />
-        <span className="mono text-[12px] text-muted">{k.caseNo} · v{k.version}</span>
-        {k.assignedUserName && <span className="chip bg-chip text-muted">{k.assignedUserName}</span>}
+        <span className="mono text-[12px] text-muted">{k.caseNo}</span>
         {k.previousCaseId && <a className="text-[12px] text-sky" href={`/cases/${k.previousCaseId}`}>linked to previous case</a>}
       </div>
       <Card title="Case timeline" right={<span className="flex items-center gap-2">In stage <Hours h={k.ageing.inStageWorkingHours} /> · open <Hours h={k.ageing.openWorkingHours} /></span>}>

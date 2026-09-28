@@ -2517,7 +2517,10 @@ paths:
       tags:
       - M14 Withdrawal
       summary: Reopen (never a case with a File)
-      x-roles: *id005
+      x-roles:
+      - ITARANG_ADMIN
+      - ECOFY_ADMIN
+      - ECOFY_USER
       operationId: post_cases_caseId_reopen
       parameters:
       - name: caseId

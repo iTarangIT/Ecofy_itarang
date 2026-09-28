@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, patch, del, uploadDocument, errorMessage } from "@/lib/api";
 import { useEpcPartners, useList, fmtDateTime, type CaseSummary } from "@/lib/hooks";
 import { useSession } from "@/components/shell/Shell";
-import { Card, Empty, Field } from "@/components/ui/primitives";
+import { Card, DateTimeField, Empty, Field } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
 
 type Activity = { id: number; type: string; callOutcome: string | null; note: string | null; nextFollowUpAt: string | null; at: string; actor: { fullName: string; role: string } | null };
@@ -34,7 +34,7 @@ export function ActivitiesTab({ c, onChange }: { c: CaseSummary; onChange: () =>
         <form onSubmit={submit} className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-page p-3">
           <Field label="Type"><select className="input" value={f.type} onChange={(e) => setF((x) => ({ ...x, type: e.target.value }))} disabled={ecofyAfterHandoff || s.role === "ECOFY_ADMIN"}>{(ecofyAfterHandoff || s.role === "ECOFY_ADMIN" ? ["COMMENT"] : ["CALL", "REMARK", "FOLLOW_UP", "COMMENT"]).map((t) => <option key={t}>{t}</option>)}</select></Field>
           {f.type === "CALL" && <Field label="Outcome (mandatory)"><select className="input" value={f.callOutcome} onChange={(e) => setF((x) => ({ ...x, callOutcome: e.target.value }))}>{["CONNECTED", "NO_ANSWER", "BUSY", "SWITCHED_OFF", "WRONG_NUMBER", "CALL_BACK"].map((o) => <option key={o}>{o}</option>)}</select></Field>}
-          {(f.type === "FOLLOW_UP" || f.type === "CALL") && <Field label="Next follow-up"><input className="input" type="datetime-local" value={f.nextFollowUpAt} onChange={(e) => setF((x) => ({ ...x, nextFollowUpAt: e.target.value }))} required={f.type === "FOLLOW_UP"} /></Field>}
+          {(f.type === "FOLLOW_UP" || f.type === "CALL") && <DateTimeField label="Next follow-up" value={f.nextFollowUpAt} onChange={(v) => setF((x) => ({ ...x, nextFollowUpAt: v }))} required={f.type === "FOLLOW_UP"} />}
           <div className="col-span-2"><Field label="Note"><textarea className="input" rows={2} value={f.note} onChange={(e) => setF((x) => ({ ...x, note: e.target.value }))} /></Field></div>
           <div className="col-span-2 flex justify-end"><button className="btn btn-primary btn-sm" type="submit" disabled={busy}>Log</button></div>
         </form>
@@ -83,7 +83,7 @@ export function AppointmentsTab({ c, onChange }: { c: CaseSummary; onChange: () 
       {itarang && c.stage !== "CLOSED" && c.stage !== "S0" && (
         <form onSubmit={book} className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-page p-3">
           <Field label="Type"><select className="input" value={f.meetingType} onChange={(e) => setF((x) => ({ ...x, meetingType: e.target.value }))}>{(types.data?.data ?? []).map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select></Field>
-          <Field label="Scheduled at"><input className="input" type="datetime-local" required value={f.scheduledAt} onChange={(e) => setF((x) => ({ ...x, scheduledAt: e.target.value }))} /></Field>
+          <DateTimeField label="Scheduled at" required value={f.scheduledAt} onChange={(v) => setF((x) => ({ ...x, scheduledAt: v }))} />
           {f.meetingType === "EPC_VISIT" && <Field label="EPC partner"><select className="input" required value={f.epcPartnerId} onChange={(e) => setF((x) => ({ ...x, epcPartnerId: e.target.value }))}><option value="">—</option>{(epcs.data?.data ?? []).filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>}
           <div className={f.meetingType === "EPC_VISIT" ? "" : "col-span-2"}><Field label="Booking remarks"><input className="input" value={f.bookingRemarks} onChange={(e) => setF((x) => ({ ...x, bookingRemarks: e.target.value }))} /></Field></div>
           <div className="col-span-2 flex justify-end"><button className="btn btn-primary btn-sm" type="submit">Book</button></div>
@@ -97,13 +97,13 @@ export function AppointmentsTab({ c, onChange }: { c: CaseSummary; onChange: () 
             <dl className="kv mt-2"><dt>Scheduled</dt><dd className="mono">{fmtDateTime(a.scheduledAt)}</dd><dt>Actual</dt><dd className="mono">{fmtDateTime(a.actualAt)}</dd><dt>Booking remarks</dt><dd>{a.bookingRemarks ?? "—"}</dd><dt>Meeting remarks</dt><dd>{a.meetingRemarks ?? "—"}</dd>{a.outcomeReason && <><dt>Reason</dt><dd>{a.outcomeReason}</dd></>}{a.meetingType === "EPC_VISIT" && <><dt>EPC feedback</dt><dd>{a.epcFeedback ?? "—"}</dd></>}</dl>
             {itarang && a.status === "SCHEDULED" && (
               <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2">
-                <Field label="Actual date & time"><input className="input" type="datetime-local" onChange={(e) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], actualAt: e.target.value } }))} /></Field>
+                <DateTimeField label="Actual date & time" value={act[a.id]?.actualAt ?? ""} onChange={(v) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], actualAt: v } }))} />
                 <Field label="Meeting remarks (mandatory)"><input className="input" onChange={(e) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], meetingRemarks: e.target.value } }))} /></Field>
                 {a.meetingType === "EPC_VISIT" && <div className="col-span-2"><Field label="EPC feedback"><input className="input" onChange={(e) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], epcFeedback: e.target.value } }))} /></Field></div>}
                 <div className="col-span-2 flex flex-wrap gap-2"><button className="btn btn-sm btn-primary" type="button" onClick={() => update(a.id, "COMPLETE")}>Mark completed</button>
                   <input className="input w-40" placeholder="no-show / cancel reason" onChange={(e) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], outcomeReason: e.target.value } }))} />
                   <button className="btn btn-sm" type="button" onClick={() => update(a.id, "NO_SHOW")}>No-show</button><button className="btn btn-sm" type="button" onClick={() => update(a.id, "CANCEL")}>Cancel</button>
-                  <input className="input w-48" type="datetime-local" onChange={(e) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], scheduledAt: e.target.value } }))} /><button className="btn btn-sm" type="button" onClick={() => update(a.id, "RESCHEDULE")}>Reschedule</button></div>
+                  <div className="w-72"><DateTimeField label="New time (to reschedule)" value={act[a.id]?.scheduledAt ?? ""} onChange={(v) => setAct((x) => ({ ...x, [a.id]: { ...x[a.id], scheduledAt: v } }))} /></div><button className="btn btn-sm" type="button" onClick={() => update(a.id, "RESCHEDULE")}>Reschedule</button></div>
               </div>
             )}
           </div>

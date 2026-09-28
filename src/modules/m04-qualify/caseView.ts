@@ -29,6 +29,9 @@ export async function caseOut(tx: Tx, tenantId: string, role: Role, rows: CaseRo
   const finIds = [...new Set(rows.map((r) => r.financierId).filter((x): x is string => Boolean(x)))];
   const fins = finIds.length ? await tx.select({ id: schema.financiers.id, name: schema.financiers.name }).from(schema.financiers).where(inArray(schema.financiers.id, finIds)) : [];
   const fmap = new Map(fins.map((f) => [f.id, f.name]));
+  // Whether the case ever reached a File: decides "Reopen" vs "new linked case" on a closed case (FR-14.7).
+  const caseIds = rows.map((r) => r.id);
+  const withFile = new Set((await tx.select({ caseId: schema.files.caseId }).from(schema.files).where(inArray(schema.files.caseId, caseIds))).map((f) => f.caseId));
 
   return rows.map((c) => {
     const cu = cmap.get(c.customerId);
@@ -84,6 +87,7 @@ export async function caseOut(tx: Tx, tenantId: string, role: Role, rows: CaseRo
       closedAt: c.closedAt,
       reopenCount: c.reopenCount,
       previousCaseId: c.previousCaseId,
+      hasFile: withFile.has(c.id),
       ageing: { inStageWorkingHours: Math.round(inStage * 100) / 100, openWorkingHours: Math.round(open * 100) / 100 },
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,

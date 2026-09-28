@@ -241,15 +241,21 @@ export async function closeCase(ctx: RequestContext, caseId: string, ifMatch: nu
   return (await caseOut(ctx.tx, ctx.auth.tenantId, role, [next], { now: ctx.now }))[0];
 }
 
-/** FR-14.7 reopen by iTarang Admin (the database blocks a case that reached a File). */
+/**
+ * FR-14.7 reopen (the database blocks a case that reached a File). iTarang Admin, and — CONFLICTS #29 — Ecofy Admin /
+ * Ecofy User, so Ecofy can rework a lead iTarang closed. The case returns to S0 with an Ecofy assignee: an Ecofy User
+ * takes it themselves; otherwise it goes back to whoever qualified it (an Ecofy Admin takes it when nobody did).
+ */
 export async function reopenCase(ctx: RequestContext, caseId: string, ifMatch: number | null, reason: string) {
   const c = await lockCase(ctx, caseId, ifMatch);
   if (c.stage !== "CLOSED") throw errors.gate("stage", "Only closed cases reopen");
   const hasFile = (await ctx.tx.select({ id: schema.files.id }).from(schema.files).where(eq(schema.files.caseId, c.id)).limit(1))[0];
   if (hasFile) throw errors.gate("no_file", "A case that reached a File never reopens; create a new linked case");
-  const next = await transition(ctx, { caseId: c.id, expectedVersion: c.version, to: "S0", set: { closureReason: null, closureNote: null, closedAt: null, temperature: null, reopenCount: c.reopenCount + 1, assignedUserId: c.qualifiedBy ?? null }, reason, auditAction: "case.reopen", eventType: "case.reopened" });
+  const role = ctx.auth.role;
+  const assignTo = role === "ECOFY_USER" ? ctx.auth.userId : (c.qualifiedBy ?? (role === "ECOFY_ADMIN" ? ctx.auth.userId : null));
+  const next = await transition(ctx, { caseId: c.id, expectedVersion: c.version, to: "S0", set: { closureReason: null, closureNote: null, closedAt: null, temperature: null, reopenCount: c.reopenCount + 1, assignedUserId: assignTo }, reason, auditAction: "case.reopen", eventType: "case.reopened" });
   await ctx.tx.update(schema.caseAssignments).set({ endedAt: ctx.now }).where(and(eq(schema.caseAssignments.caseId, c.id), isNull(schema.caseAssignments.endedAt)));
-  if (c.qualifiedBy) await ctx.tx.insert(schema.caseAssignments).values({ tenantId: c.tenantId, caseId: c.id, userId: c.qualifiedBy, assignedBy: ctx.auth.userId, reason: "Reopened", assignedAt: ctx.now });
+  if (assignTo) await ctx.tx.insert(schema.caseAssignments).values({ tenantId: c.tenantId, caseId: c.id, userId: assignTo, assignedBy: ctx.auth.userId, reason: "Reopened", assignedAt: ctx.now });
   return (await caseOut(ctx.tx, ctx.auth.tenantId, ctx.auth.role, [next], { now: ctx.now }))[0];
 }
 

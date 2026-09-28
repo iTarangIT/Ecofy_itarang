@@ -171,6 +171,21 @@ describe("R1 — access, qualification, queue, follow-up", () => {
     expect(re.reopenCount).toBe(1);
   });
 
+  it("CONFLICTS #29: Ecofy reopens a case iTarang closed; the Ecofy User takes it; an iTarang Caller cannot", async () => {
+    const c = await leadAtS2(eu, ia, t.users.ITARANG_CALLER.id);
+    const closed = expectOk<{ stage: string; version: number }>(await ia.post(`/cases/${c.id}/close`, { closureReason: "NOT_INTERESTED", note: "closed from the CRM" }, { ifMatch: c.version }));
+    expect(closed.stage).toBe("CLOSED");
+    expect((await ic.post(`/cases/${c.id}/reopen`, { reason: "caller tries" }, { ifMatch: closed.version })).status).toBe(403);
+    const me = expectOk<{ permissions: string[] }>(await eu.get("/me"));
+    expect(me.permissions).toContain("cases.reopen");
+    const re = expectOk<{ stage: string; reopenCount: number; assignedUserId: string | null; closureReason: string | null; hasFile: boolean }>(await eu.post(`/cases/${c.id}/reopen`, { reason: "customer wants to talk again" }, { ifMatch: closed.version }));
+    expect(re.stage).toBe("S0");
+    expect(re.reopenCount).toBe(1);
+    expect(re.closureReason).toBeNull();
+    expect(re.hasFile).toBe(false);
+    expect(re.assignedUserId).toBe(t.users.ECOFY_USER.id);
+  });
+
   it("UAT-33: seats — invite blocked at cap, allowed after IA raises it", async () => {
     const r1 = await ea.post("/users", { fullName: "Third User", email: "eu3@test.local", role: "ECOFY_USER" });
     expect(r1.status).toBe(409);
